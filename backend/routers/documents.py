@@ -12,6 +12,7 @@ from services.ingestion import process_document, extract_text_from_url
 from services.embeddings import get_embeddings_batch
 from services.auth import get_current_user
 from services.audit import log_event
+from config import get_settings
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -26,7 +27,22 @@ ALLOWED_EXTENSIONS = {
     "jpg", "jpeg", "png", "gif", "webp", "xlsx", "xls"
 }
 
-
+async def check_document_limit(user_id: str, supabase):
+    """Lanza 429 si el usuario alcanzó su límite."""
+    settings = get_settings()
+    result = (
+        supabase.table("documents")
+        .select("id", count="exact")
+        .eq("user_id", user_id)
+        .execute()
+    )
+    count = result.count or 0
+    if count >= MAX_DOCS_PER_USER:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Límite alcanzado: máximo {MAX_DOCS_PER_USER} documentos por usuario. "
+                   f"Elimina alguno antes de subir otro."
+        )
 @router.post("/upload")
 @limiter.limit("10/minute")
 async def upload_document(
@@ -38,6 +54,8 @@ async def upload_document(
 ):
     supabase = get_supabase_client()
     logger.info(f"DEBUG session_id='{session_id}' user_id='{user['id']}'")
+
+    await check_document_limit(user["id"], supabase)
 
     if not file and not url:
         raise HTTPException(status_code=400, detail="Debes proveer un archivo o una URL.")

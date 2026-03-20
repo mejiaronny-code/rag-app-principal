@@ -1,7 +1,7 @@
 from pydantic_settings import BaseSettings
 from functools import lru_cache
 from typing import Optional
-
+import os
 
 class Settings(BaseSettings):
     # Google AI
@@ -26,6 +26,8 @@ class Settings(BaseSettings):
     # Rate limiting
     RATE_LIMIT_UPLOAD: str = "10/minute"
     RATE_LIMIT_CHAT: str = "30/minute"
+
+    MAX_DOCS_PER_USER: int = int(os.getenv("MAX_DOCS_PER_USER", "20"))
 
     class Config:
         env_file = ".env"
