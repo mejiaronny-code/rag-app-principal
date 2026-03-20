@@ -237,7 +237,10 @@ async def get_document_url(
         return {"url": data["source_url"], "type": "url", "name": data["name"]}
 
     if data.get("storage_path"):
-        public_url = supabase.storage.from_("documents").get_public_url(data["storage_path"])
-        return {"url": public_url, "type": "file", "name": data["name"]}
+        signed = supabase.storage.from_("documents").create_signed_url(
+            path=data["storage_path"],
+            expires_in=3600  # válida por 1 hora
+        )
+        return {"url": signed["signedURL"], "type": "file", "name": data["name"]}
 
     raise HTTPException(status_code=404, detail="Este documento no tiene archivo original guardado.")

@@ -90,6 +90,7 @@ export function Sidebar({
   onNewConversation,
   onDeleteConversation,
   onRenameConversation,
+  clearError,
 }) {
   useEffect(() => {
     onRefreshDocs()
@@ -153,15 +154,10 @@ export function Sidebar({
           onUrlUpload={onUrlUpload}
           uploading={uploading}
           uploadProgress={uploadProgress}
+          uploadError={error}        
+          onClearError={clearError}    
         />
       </div>
-
-      {/* Error */}
-      {error && (
-        <div className="mx-3 mb-2 px-3 py-2 rounded-lg bg-danger/10 border border-danger/20">
-          <p className="text-xs text-danger">{error}</p>
-        </div>
-      )}
 
       {/* Documents list */}
       <div className="flex-1 overflow-y-auto px-1 min-h-0">

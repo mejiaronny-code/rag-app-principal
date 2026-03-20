@@ -1,5 +1,7 @@
 import { useState, useCallback } from 'react'
 import { uploadFile, uploadUrl, getSessionDocuments, deleteDocument } from '../api'
+import { getFriendlyUploadError } from '../components/UploadZone'  // ← nueva importación
+
 
 export function useDocuments(sessionId) {
   const [documents, setDocuments] = useState([])
@@ -22,9 +24,7 @@ export function useDocuments(sessionId) {
     setUploadProgress(0)
     setError(null)
     try {
-      const result = await uploadFile(sessionId, file, setUploadProgress)
-      await fetchDocuments()
-      return result
+      setError(getFriendlyUploadError(e))  // ← cambio
     } catch (e) {
       const msg = e.response?.data?.detail || 'Error subiendo el archivo.'
       setError(msg)
@@ -43,9 +43,7 @@ export function useDocuments(sessionId) {
       await fetchDocuments()
       return result
     } catch (e) {
-      const msg = e.response?.data?.detail || 'Error procesando la URL.'
-      setError(msg)
-      throw e
+      setError(getFriendlyUploadError(e))
     } finally {
       setUploading(false)
     }
@@ -56,21 +54,21 @@ export function useDocuments(sessionId) {
       await deleteDocument(sessionId, docId)
       setDocuments(prev => prev.filter(d => d.id !== docId))
     } catch (e) {
-      const msg = e.response?.data?.detail || 'Error eliminando el documento.'
-      setError(msg)
-      throw e
+      setError(getFriendlyUploadError(e))
     }
   }, [sessionId])
 
   const clearDocuments = useCallback(() => {
     setDocuments([])
   }, [])
+  const clearError = useCallback(() => setError(null), [])
 
   return {
     documents,
     uploading,
     uploadProgress,
     error,
+    clearError,
     fetchDocuments,
     uploadFileDoc,
     uploadUrlDoc,

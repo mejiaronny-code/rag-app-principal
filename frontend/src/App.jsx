@@ -46,6 +46,7 @@ export default function App() {
     error: chatError,
     sendMessage,
     clearMessages,
+    clearError, 
   } = useChat(sessionId, activeConversationId, loadConversationMessages)
   const { selectedIds, allSelected, activeIds, toggle, selectAll } = useDocumentSelection(documents)
   const messagesEndRef = useRef(null)
@@ -144,6 +145,7 @@ export default function App() {
         onNewConversation={startNewConversation}
         onDeleteConversation={removeConversation}
         onRenameConversation={renameConversation}
+        clearError={clearError}
       />
 
       <main className="flex flex-col flex-1 min-w-0 h-full">
