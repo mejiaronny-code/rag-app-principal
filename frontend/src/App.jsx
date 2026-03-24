@@ -11,8 +11,9 @@ import { EmptyState } from './components/EmptyState'
 import { useTheme } from './hooks/useTheme'
 import { useAuth } from './context/AuthContext'
 import { LoginPage } from './pages/LoginPage'
-import { LogOut, Menu } from 'lucide-react'
+import { LogOut, Menu, Shield } from 'lucide-react'
 import { useConversations } from './hooks/useConversations'
+import { AdminPage } from './pages/AdminPage'
 
 export default function App() {
   // ── Todos los hooks primero ──────────────────────────────
@@ -51,12 +52,27 @@ export default function App() {
   const { selectedIds, allSelected, activeIds, toggle, selectAll } = useDocumentSelection(documents)
   const messagesEndRef = useRef(null)
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [showAdmin, setShowAdmin] = useState(false)  // ← nueva línea
+  const { getToken } = useAuth()
+  const [isAdmin, setIsAdmin] = useState(false)
+
+  useEffect(() => {
+    if (!user) return
+    getToken().then(token => {
+      fetch(`${import.meta.env.VITE_API_URL}/admin/stats`, {
+        headers: { Authorization: `Bearer ${token}` }
+      }).then(res => setIsAdmin(res.ok))
+    })
+  }, [user])
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, chatLoading])
 
   // ── Returns condicionales después de todos los hooks ────
+  if (showAdmin) {
+    return <AdminPage onBack={() => setShowAdmin(false)} />
+  }
   if (authLoading) {
     return (
       <div className="min-h-screen bg-bg-primary flex items-center justify-center">
@@ -196,6 +212,15 @@ export default function App() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" />
                 </svg>
               )}
+            </button>
+
+            {/* Botón Admin — solo visible para admins */}
+            <button
+              onClick={() => setShowAdmin(true)}
+              className="p-2 rounded-lg border border-border hover:bg-bg-tertiary transition-colors"
+              title="Panel de administración"
+            >
+              <Shield className="w-4 h-4" style={{ color: 'var(--accent-green)' }} />
             </button>
 
             {/* Logout */}

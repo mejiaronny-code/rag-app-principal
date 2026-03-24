@@ -8,7 +8,7 @@ from config import get_settings
 from routers import chat, documents, sessions
 import os
 from dotenv import load_dotenv
-from routers import chat, documents, sessions, conversations  # agregar conversations
+from routers import chat, documents, sessions, conversations, admin  # agregar conversations
 
 # 1. Carga las variables del .env al entorno del sistema
 load_dotenv()
@@ -44,6 +44,7 @@ app.include_router(documents.router, prefix="/documents", tags=["documents"])
 app.include_router(chat.router, prefix="/chat", tags=["chat"])
 app.include_router(sessions.router, prefix="/sessions", tags=["sessions"])
 app.include_router(conversations.router, prefix="/conversations", tags=["conversations"])
+app.include_router(admin.router, tags=["admin"])
 
 @app.get("/health")
 async def health():
