@@ -244,7 +244,7 @@ export default function App() {
             }
           />
           <p className="text-xs text-text-muted text-center mt-2 hidden sm:block">
-            Respuestas basadas exclusivamente en tus documentos · Llama 3.3 70B
+            Respuestas basadas exclusivamente en tus documentos · Por Ronny Mejia
           </p>
         </div>
       </main>

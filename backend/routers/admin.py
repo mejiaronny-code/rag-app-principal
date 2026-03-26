@@ -1,11 +1,21 @@
-from fastapi import APIRouter, Depends, HTTPException
+# backend/routers/admin.py
+from fastapi import APIRouter, Depends, HTTPException, Request
 from services.auth import get_current_user
 from services.retriever import retrieve_context
 from db.supabase_client import get_supabase_client
 from config import get_settings
+from limiter import limiter                          # ← NUEVO
 from groq import Groq
 
 router = APIRouter(prefix="/admin", tags=["admin"])
+
+# ─── Límites de rate ──────────────────────────────────────────────────────────
+ADMIN_CHAT_RATE  = "10/minute"    # ← NUEVO
+ADMIN_WRITE_RATE = "30/minute"    # ← NUEVO
+ADMIN_READ_RATE  = "60/minute"    # ← NUEVO
+
+# Máx. documentos que /admin/chat carga en memoria (Fix 4)          # ← NUEVO
+ADMIN_GLOBAL_DOC_LIMIT = 200                                         # ← NUEVO
 
 
 # ─── Groq client ─────────────────────────────────────────────────────────────
@@ -31,7 +41,8 @@ def require_admin(current_user=Depends(get_current_user)):
 
 # ─── Stats ────────────────────────────────────────────────────────────────────
 @router.get("/stats")
-async def get_stats(admin=Depends(require_admin)):
+@limiter.limit(ADMIN_READ_RATE)                                      # ← NUEVO
+async def get_stats(request: Request, admin=Depends(require_admin)): # ← NUEVO: request: Request
     supabase = get_supabase_client()
     users_count    = supabase.table("profiles").select("id", count="exact").execute().count
     docs_count     = supabase.table("documents").select("id", count="exact").execute().count
@@ -45,7 +56,8 @@ async def get_stats(admin=Depends(require_admin)):
 
 # ─── Usuarios ─────────────────────────────────────────────────────────────────
 @router.get("/users")
-async def list_users(admin=Depends(require_admin)):
+@limiter.limit(ADMIN_READ_RATE)                                      # ← NUEVO
+async def list_users(request: Request, admin=Depends(require_admin)): # ← NUEVO: request: Request
     supabase = get_supabase_client()
     profiles = supabase.table("profiles").select("*").execute().data
     result = []
@@ -62,14 +74,24 @@ async def list_users(admin=Depends(require_admin)):
 
 
 @router.patch("/users/{user_id}/deactivate")
-async def deactivate_user(user_id: str, admin=Depends(require_admin)):
+@limiter.limit(ADMIN_WRITE_RATE)                                     # ← NUEVO
+async def deactivate_user(
+    request: Request,                                                 # ← NUEVO
+    user_id: str,
+    admin=Depends(require_admin),
+):
     supabase = get_supabase_client()
     supabase.table("profiles").update({"active": False}).eq("id", user_id).execute()
     return {"message": f"Usuario {user_id} desactivado."}
 
 
 @router.patch("/users/{user_id}/activate")
-async def activate_user(user_id: str, admin=Depends(require_admin)):
+@limiter.limit(ADMIN_WRITE_RATE)                                     # ← NUEVO
+async def activate_user(
+    request: Request,                                                 # ← NUEVO
+    user_id: str,
+    admin=Depends(require_admin),
+):
     supabase = get_supabase_client()
     supabase.table("profiles").update({"active": True}).eq("id", user_id).execute()
     return {"message": f"Usuario {user_id} activado."}
@@ -77,7 +99,12 @@ async def activate_user(user_id: str, admin=Depends(require_admin)):
 
 # ─── Documentos de un usuario ────────────────────────────────────────────────
 @router.get("/users/{user_id}/documents")
-async def get_user_documents(user_id: str, admin=Depends(require_admin)):
+@limiter.limit(ADMIN_READ_RATE)                                      # ← NUEVO
+async def get_user_documents(
+    request: Request,                                                 # ← NUEVO
+    user_id: str,
+    admin=Depends(require_admin),
+):
     supabase = get_supabase_client()
     docs = (
         supabase.table("documents")
@@ -92,7 +119,12 @@ async def get_user_documents(user_id: str, admin=Depends(require_admin)):
 
 # ─── URL de un documento (admin) ─────────────────────────────────────────────
 @router.get("/documents/{doc_id}/url")
-async def admin_get_document_url(doc_id: str, admin=Depends(require_admin)):
+@limiter.limit(ADMIN_READ_RATE)                                      # ← NUEVO
+async def admin_get_document_url(
+    request: Request,                                                 # ← NUEVO
+    doc_id: str,
+    admin=Depends(require_admin),
+):
     supabase = get_supabase_client()
     doc = (
         supabase.table("documents")
@@ -116,7 +148,9 @@ async def admin_get_document_url(doc_id: str, admin=Depends(require_admin)):
 
 # ─── Chat RAG sobre documentos de un usuario específico ──────────────────────
 @router.post("/users/{user_id}/chat")
+@limiter.limit(ADMIN_CHAT_RATE)                                      # ← NUEVO
 async def admin_chat_user(
+    request: Request,                                                 # ← NUEVO
     user_id: str,
     body: dict,
     admin=Depends(require_admin),
@@ -189,7 +223,9 @@ PREGUNTA: {question}"""
 
 # ─── Chat RAG global (todos los usuarios) ────────────────────────────────────
 @router.post("/chat")
+@limiter.limit(ADMIN_CHAT_RATE)                                      # ← NUEVO
 async def admin_global_chat(
+    request: Request,                                                 # ← NUEVO
     body: dict,
     admin=Depends(require_admin),
 ):
@@ -200,14 +236,20 @@ async def admin_global_chat(
     if not question:
         raise HTTPException(status_code=400, detail="La pregunta no puede estar vacía.")
 
-    # Todos los documentos de la plataforma
-    all_docs = supabase.table("documents").select("id, name, user_id").execute().data
+    # ← NUEVO: limitar a los N documentos más recientes para evitar OOM
+    all_docs = (
+        supabase.table("documents")
+        .select("id, name, user_id")
+        .order("created_at", desc=True)
+        .limit(ADMIN_GLOBAL_DOC_LIMIT)
+        .execute()
+        .data
+    )
     if not all_docs:
         return {"answer": "No hay documentos en la plataforma.", "sources": []}
 
     all_doc_ids = [d["id"] for d in all_docs]
 
-    # Mapa user_id → nombre completo
     user_ids = list({d["user_id"] for d in all_docs})
     profiles = (
         supabase.table("profiles")
@@ -219,7 +261,6 @@ async def admin_global_chat(
     user_map     = {p["id"]: f"{p['first_name']} {p['last_name']}".strip() for p in profiles}
     doc_user_map = {d["id"]: user_map.get(d["user_id"], "Usuario desconocido") for d in all_docs}
 
-    # Retrieval global
     chunks = retrieve_context(
         query=question,
         session_id="00000000-0000-0000-0000-000000000000",
@@ -232,7 +273,6 @@ async def admin_global_chat(
             "sources": [],
         }
 
-    # Contexto enriquecido con nombre de usuario
     context_lines = []
     for c in chunks:
         doc_name  = c.get("document_name", "Documento")
@@ -261,7 +301,6 @@ PREGUNTA: {question}"""
     )
     answer = response.choices[0].message.content.strip()
 
-    # Fuentes con nombre de usuario
     sources = []
     seen    = set()
     for c in chunks:
@@ -278,7 +317,12 @@ PREGUNTA: {question}"""
 
 # ─── Eliminar documento ───────────────────────────────────────────────────────
 @router.delete("/documents/{doc_id}")
-async def admin_delete_document(doc_id: str, admin=Depends(require_admin)):
+@limiter.limit(ADMIN_WRITE_RATE)                                     # ← NUEVO
+async def admin_delete_document(
+    request: Request,                                                 # ← NUEVO
+    doc_id: str,
+    admin=Depends(require_admin),
+):
     supabase = get_supabase_client()
     supabase.table("embeddings").delete().eq("document_id", doc_id).execute()
     supabase.table("documents").delete().eq("id", doc_id).execute()
@@ -287,7 +331,12 @@ async def admin_delete_document(doc_id: str, admin=Depends(require_admin)):
 
 # ─── Audit log ────────────────────────────────────────────────────────────────
 @router.get("/audit-logs")
-async def get_audit_logs(limit: int = 100, admin=Depends(require_admin)):
+@limiter.limit(ADMIN_READ_RATE)                                      # ← NUEVO
+async def get_audit_logs(
+    request: Request,                                                 # ← NUEVO
+    limit: int = 100,
+    admin=Depends(require_admin),
+):
     supabase = get_supabase_client()
     logs = (
         supabase.table("audit_logs")

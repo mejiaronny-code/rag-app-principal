@@ -6,6 +6,7 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from config import get_settings
 from routers import chat, documents, sessions
+from limiter import limiter 
 import os
 from dotenv import load_dotenv
 from routers import chat, documents, sessions, conversations, admin  # agregar conversations

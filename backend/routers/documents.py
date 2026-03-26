@@ -12,7 +12,6 @@ from services.ingestion import process_document, extract_text_from_url
 from services.embeddings import get_embeddings_batch
 from services.auth import get_current_user
 from services.audit import log_event
-from config import get_settings
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -20,13 +19,14 @@ limiter = Limiter(key_func=get_remote_address)
 
 router = APIRouter()
 
-MAX_FILE_SIZE = settings.MAX_FILE_SIZE_MB * 1024 * 1024
+MAX_FILE_SIZE    = settings.MAX_FILE_SIZE_MB * 1024 * 1024
 MAX_DOCS_PER_USER = settings.MAX_DOCS_PER_USER
 
 ALLOWED_EXTENSIONS = {
     "pdf", "docx", "doc", "txt", "md", "markdown",
     "jpg", "jpeg", "png", "gif", "webp", "xlsx", "xls"
 }
+
 
 async def check_document_limit(user_id: str, supabase):
     """Lanza 429 si el usuario alcanzó su límite."""
@@ -44,6 +44,28 @@ async def check_document_limit(user_id: str, supabase):
             detail=f"Límite alcanzado: máximo {MAX_DOCS_PER_USER} documentos por usuario. "
                    f"Elimina alguno antes de subir otro."
         )
+
+
+# ← NUEVO: valida que session_id no pertenezca a otro usuario
+async def check_session_owner(session_id: str, user_id: str, supabase):
+    """
+    Si el session_id ya tiene documentos, verifica que sean del mismo usuario.
+    Evita que un usuario suba documentos a la sesión de otro.
+    """
+    existing = (
+        supabase.table("documents")
+        .select("user_id")
+        .eq("session_id", session_id)
+        .limit(1)
+        .execute()
+    )
+    if existing.data and existing.data[0]["user_id"] != user_id:
+        raise HTTPException(
+            status_code=403,
+            detail="No tienes acceso a esta sesión."
+        )
+
+
 @router.post("/upload")
 @limiter.limit("10/minute")
 async def upload_document(
@@ -57,6 +79,7 @@ async def upload_document(
     logger.info(f"DEBUG session_id='{session_id}' user_id='{user['id']}'")
 
     await check_document_limit(user["id"], supabase)
+    await check_session_owner(session_id, user["id"], supabase)  # ← NUEVO
 
     if not file and not url:
         raise HTTPException(status_code=400, detail="Debes proveer un archivo o una URL.")
@@ -93,7 +116,7 @@ async def upload_document(
         })
 
     # --- Procesar archivo ---
-    filename = file.filename or "archivo"
+    filename  = file.filename or "archivo"
     extension = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
 
     if extension not in ALLOWED_EXTENSIONS:
@@ -165,9 +188,9 @@ def _save_and_embed(
 
     doc_result = supabase.table("documents").insert({
         "session_id": session_id,
-        "user_id": user_id,
-        "name": name,
-        "type": doc_type,
+        "user_id":    user_id,
+        "name":       name,
+        "type":       doc_type,
         "source_url": source_url,
         "storage_path": storage_path,
     }).execute()
@@ -180,10 +203,10 @@ def _save_and_embed(
     embedding_rows = [
         {
             "document_id": str(doc_id),
-            "session_id": session_id,
-            "user_id": user_id,
-            "content": chunk,
-            "embedding": emb,
+            "session_id":  session_id,
+            "user_id":     user_id,
+            "content":     chunk,
+            "embedding":   emb,
             "chunk_index": i,
         }
         for i, (chunk, emb) in enumerate(zip(chunks, embeddings))
@@ -199,14 +222,14 @@ def _save_and_embed(
 
 def _get_mime_type(extension: str) -> str:
     mime_types = {
-        "pdf": "application/pdf",
+        "pdf":  "application/pdf",
         "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        "txt": "text/plain",
-        "md": "text/markdown",
-        "jpg": "image/jpeg",
+        "txt":  "text/plain",
+        "md":   "text/markdown",
+        "jpg":  "image/jpeg",
         "jpeg": "image/jpeg",
-        "png": "image/png",
-        "gif": "image/gif",
+        "png":  "image/png",
+        "gif":  "image/gif",
         "webp": "image/webp",
     }
     return mime_types.get(extension, "application/octet-stream")
@@ -214,7 +237,7 @@ def _get_mime_type(extension: str) -> str:
 
 @router.get("/{doc_id}/url")
 async def get_document_url(
-    doc_id: str,
+    doc_id:     str,
     session_id: str,
     user: dict = Depends(get_current_user),
 ):
@@ -223,9 +246,9 @@ async def get_document_url(
     doc = (
         supabase.table("documents")
         .select("storage_path, name, source_url, type")
-        .eq("id", doc_id)
+        .eq("id",         doc_id)
         .eq("session_id", session_id)
-        .eq("user_id", user["id"])
+        .eq("user_id",    user["id"])
         .execute()
     )
 
@@ -240,7 +263,7 @@ async def get_document_url(
     if data.get("storage_path"):
         signed = supabase.storage.from_("documents").create_signed_url(
             path=data["storage_path"],
-            expires_in=3600  # válida por 1 hora
+            expires_in=3600
         )
         return {"url": signed["signedURL"], "type": "file", "name": data["name"]}
 
