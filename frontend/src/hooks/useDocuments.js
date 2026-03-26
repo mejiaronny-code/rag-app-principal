@@ -24,10 +24,13 @@ export function useDocuments(sessionId) {
     setUploadProgress(0)
     setError(null)
     try {
-      setError(getFriendlyUploadError(e))  // ← cambio
+      const result = await uploadFile(sessionId, file, (progress) => {
+        setUploadProgress(progress)
+      })
+      await fetchDocuments()
+      return result
     } catch (e) {
-      const msg = e.response?.data?.detail || 'Error subiendo el archivo.'
-      setError(msg)
+      setError(getFriendlyUploadError(e))
       throw e
     } finally {
       setUploading(false)

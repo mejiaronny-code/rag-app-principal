@@ -21,6 +21,7 @@ limiter = Limiter(key_func=get_remote_address)
 router = APIRouter()
 
 MAX_FILE_SIZE = settings.MAX_FILE_SIZE_MB * 1024 * 1024
+MAX_DOCS_PER_USER = settings.MAX_DOCS_PER_USER
 
 ALLOWED_EXTENSIONS = {
     "pdf", "docx", "doc", "txt", "md", "markdown",

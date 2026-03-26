@@ -27,8 +27,8 @@ function DocItem({ doc, selected, allSelected, onToggle, onDelete, sessionId }) 
         onClick={() => onToggle(doc.id)}
         className="flex-shrink-0 w-3.5 h-3.5 rounded border transition-colors"
         style={{
-          background: isActive ? 'var(--accent-blue)' : 'transparent',
-          borderColor: isActive ? 'var(--accent-blue)' : 'var(--border)',
+          background: isActive ? 'var(--accent-green)' : 'transparent',
+          borderColor: isActive ? 'var(--accent-green)' : 'var(--border)',
         }}
         title={isActive ? 'Deseleccionar' : 'Seleccionar'}
       >
@@ -39,7 +39,7 @@ function DocItem({ doc, selected, allSelected, onToggle, onDelete, sessionId }) 
         )}
       </button>
 
-      <span className="text-accent-blue flex-shrink-0">
+      <span className="text-accent-green flex-shrink-0">
         <DocIcon type={doc.type} className="w-3.5 h-3.5" />
       </span>
 
@@ -49,7 +49,7 @@ function DocItem({ doc, selected, allSelected, onToggle, onDelete, sessionId }) 
 
       <button
         onClick={handleView}
-        className="opacity-0 group-hover:opacity-100 text-text-muted hover:text-accent-blue transition-all duration-150 flex-shrink-0"
+        className="opacity-0 group-hover:opacity-100 text-text-muted hover:text-accent-green transition-all duration-150 flex-shrink-0"
         title="Ver documento"
       >
         <Eye className="w-3 h-3" />
@@ -170,7 +170,7 @@ export function Sidebar({
             <button
               onClick={onSelectAll}
               className={`w-full text-left px-3 py-1.5 text-xs transition-colors rounded-lg mb-1
-                ${allSelected ? 'text-accent-blue font-medium' : 'text-text-muted hover:text-text-primary'}`}
+                ${allSelected ? 'text-accent-green font-medium' : 'text-text-muted hover:text-text-primary'}`}
             >
               {allSelected ? '✓ Todos los documentos' : 'Seleccionar todos'}
             </button>

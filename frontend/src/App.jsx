@@ -40,6 +40,7 @@ export default function App() {
     uploadUrlDoc,
     removeDocument,
     clearDocuments,
+    clearError: clearDocError,
   } = useDocuments(sessionId)
   const {
     messages,
@@ -161,7 +162,7 @@ export default function App() {
         onNewConversation={startNewConversation}
         onDeleteConversation={removeConversation}
         onRenameConversation={renameConversation}
-        clearError={clearError}
+        clearError={clearDocError}
       />
 
       <main className="flex flex-col flex-1 min-w-0 h-full">
