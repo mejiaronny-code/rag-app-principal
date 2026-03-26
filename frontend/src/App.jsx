@@ -1,3 +1,4 @@
+// src/App.jsx
 import { useEffect, useRef, useState } from 'react'
 import { useSession } from './hooks/useSession'
 import { useDocuments } from './hooks/useDocuments'
@@ -8,6 +9,7 @@ import { ChatMessage } from './components/ChatMessage'
 import { ChatInput } from './components/ChatInput'
 import { TypingIndicator } from './components/TypingIndicator'
 import { EmptyState } from './components/EmptyState'
+import { LoadingScreen } from './components/LoadingScreen'   // ← nuevo
 import { useTheme } from './hooks/useTheme'
 import { useAuth } from './context/AuthContext'
 import { LoginPage } from './pages/LoginPage'
@@ -16,46 +18,32 @@ import { useConversations } from './hooks/useConversations'
 import { AdminPage } from './pages/AdminPage'
 
 export default function App() {
-  // ── Todos los hooks primero ──────────────────────────────
-  const { user, loading: authLoading, signOut, fullName } = useAuth()
-  const { theme, toggleTheme } = useTheme()
+  const {
+    user, loading: authLoading, signOut, fullName,
+    transitioning, transitionMsg, withTransition,  // ← nuevo
+  } = useAuth()
+  const { theme, toggleTheme }  = useTheme()
   const { sessionId, createNewSession } = useSession(user?.id)
   const {
-    conversations,
-    activeConversationId,
-    setActiveConversationId,
-    startNewConversation,
-    renameConversation,
-    removeConversation,
-    loadConversationMessages,
-    autoTitle,
+    conversations, activeConversationId, setActiveConversationId,
+    startNewConversation, renameConversation, removeConversation,
+    loadConversationMessages, autoTitle,
   } = useConversations(sessionId)
   const {
-    documents,
-    uploading,
-    uploadProgress,
-    error: docError,
-    fetchDocuments,
-    uploadFileDoc,
-    uploadUrlDoc,
-    removeDocument,
-    clearDocuments,
-    clearError: clearDocError,
+    documents, uploading, uploadProgress, error: docError,
+    fetchDocuments, uploadFileDoc, uploadUrlDoc, removeDocument,
+    clearDocuments, clearError: clearDocError,
   } = useDocuments(sessionId)
   const {
-    messages,
-    loading: chatLoading,
-    error: chatError,
-    sendMessage,
-    clearMessages,
-    clearError, 
+    messages, loading: chatLoading, error: chatError,
+    sendMessage, clearMessages, clearError,
   } = useChat(sessionId, activeConversationId, loadConversationMessages)
   const { selectedIds, allSelected, activeIds, toggle, selectAll } = useDocumentSelection(documents)
   const messagesEndRef = useRef(null)
-  const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [showAdmin, setShowAdmin] = useState(false)  // ← nueva línea
+  const [sidebarOpen, setSidebarOpen]   = useState(false)
+  const [showAdmin, setShowAdmin]       = useState(false)
   const { getToken } = useAuth()
-  const [isAdmin, setIsAdmin] = useState(false)
+  const [isAdmin, setIsAdmin]           = useState(false)
 
   useEffect(() => {
     if (!user) return
@@ -70,29 +58,33 @@ export default function App() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, chatLoading])
 
-  // ── Returns condicionales después de todos los hooks ────
-  if (showAdmin) {
-    return <AdminPage onBack={() => setShowAdmin(false)} />
-  }
-  if (authLoading) {
-    return (
-      <div className="min-h-screen bg-bg-primary flex items-center justify-center">
-        <div className="w-6 h-6 border-2 border-accent-blue border-t-transparent rounded-full animate-spin" />
-      </div>
-    )
-  }
+  // ── Pantalla de carga global ─────────────────────────────────────────────
+  if (transitioning) return <LoadingScreen message={transitionMsg} />
+
+  if (showAdmin) return <AdminPage onBack={() => setShowAdmin(false)} />
+
+  if (authLoading) return <LoadingScreen message="Cargando..." />
 
   if (!user) return <LoginPage />
 
-  // ── Handlers ─────────────────────────────────────────────
+  // ── Handlers ─────────────────────────────────────────────────────────────
   const handleNewSession = async () => {
     const confirmed = window.confirm(
       '¿Crear una nueva sesión? Se eliminarán todos los documentos y el historial de esta sesión.'
     )
     if (!confirmed) return
-    await createNewSession(true)
-    clearDocuments()
-    clearMessages()
+    await withTransition("Creando nueva sesión...", async () => {
+      await createNewSession(true)
+      clearDocuments()
+      clearMessages()
+    })
+  }
+
+  const handleOpenAdmin = async () => {
+    await withTransition("Abriendo panel de administración...", async () => {
+      await new Promise(r => setTimeout(r, 300))
+    })
+    setShowAdmin(true)
   }
 
   const handleFileUpload = async (file) => {
@@ -114,18 +106,12 @@ export default function App() {
   const handleSend = async (query) => {
     try {
       let convId = activeConversationId
-      console.log('handleSend - convId inicial:', convId)
-  
       if (!convId) {
         const conv = await startNewConversation()
-        console.log('handleSend - nueva conv:', conv)
         if (!conv?.id) return
         convId = conv.id
       }
-  
-      console.log('handleSend - enviando con convId:', convId)
       await sendMessage(query, activeIds, convId)
-  
       const activeConv = conversations.find(c => c.id === convId)
       if (activeConv?.title === 'Nueva conversación') {
         await autoTitle(convId, query)
@@ -135,7 +121,7 @@ export default function App() {
     }
   }
 
-  // ── Render principal ──────────────────────────────────────
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="flex h-screen overflow-hidden bg-bg-primary">
       <Sidebar
@@ -166,27 +152,23 @@ export default function App() {
       />
 
       <main className="flex flex-col flex-1 min-w-0 h-full">
-        {/* Top bar — verde */}
+        {/* Top bar */}
         <header className="app-header flex items-center justify-between px-4 md:px-6 py-3.5">
           <div className="flex items-center gap-3 min-w-0">
-            {/* Botón hamburguesa — solo en móvil */}
             <button
               onClick={() => setSidebarOpen(true)}
               className="md:hidden p-2 rounded-lg hover:bg-bg-tertiary transition-colors flex-shrink-0"
               style={{ color: 'var(--accent-green)' }}
-              title="Abrir menú"
             >
               <Menu className="w-5 h-5" />
             </button>
-
             <div className="min-w-0">
-              <h2 className="app-header-title text-sm truncate">
-                Chat con documentos
-              </h2>
+              <h2 className="app-header-title text-sm truncate">Chat con documentos</h2>
               <p className="text-xs truncate" style={{ color: 'var(--accent-green)', opacity: 0.7 }}>
                 {documents.length === 0
                   ? 'Sin documentos indexados'
-                  : `${documents.length} documento${documents.length > 1 ? 's' : ''} indexado${documents.length > 1 ? 's' : ''}`}
+                  : `${documents.length} documento${documents.length > 1 ? 's' : ''} indexado${documents.length > 1 ? 's' : ''}`
+                }
               </p>
             </div>
           </div>
@@ -197,8 +179,6 @@ export default function App() {
                 {chatError}
               </p>
             )}
-
-            {/* Toggle dark/light */}
             <button
               onClick={toggleTheme}
               className="p-2 rounded-lg border border-border hover:bg-bg-tertiary transition-colors"
@@ -214,17 +194,13 @@ export default function App() {
                 </svg>
               )}
             </button>
-
-            {/* Botón Admin — solo visible para admins */}
             <button
-              onClick={() => setShowAdmin(true)}
+              onClick={handleOpenAdmin}
               className="p-2 rounded-lg border border-border hover:bg-bg-tertiary transition-colors"
               title="Panel de administración"
             >
               <Shield className="w-4 h-4" style={{ color: 'var(--accent-green)' }} />
             </button>
-
-            {/* Logout */}
             <button
               onClick={signOut}
               className="p-2 rounded-lg border border-border hover:bg-bg-tertiary transition-colors"
@@ -235,7 +211,6 @@ export default function App() {
           </div>
         </header>
 
-        {/* Error móvil */}
         {chatError && (
           <div className="sm:hidden mx-4 mt-2">
             <p className="text-xs text-danger bg-danger/10 border border-danger/20 px-3 py-1.5 rounded-lg truncate">
@@ -244,7 +219,6 @@ export default function App() {
           </div>
         )}
 
-        {/* Messages */}
         <div className="flex-1 overflow-y-auto px-4 md:px-6 py-6 space-y-5 min-h-0">
           {messages.length === 0 && !chatLoading ? (
             <EmptyState hasDocuments={documents.length > 0} />
@@ -259,7 +233,6 @@ export default function App() {
           )}
         </div>
 
-        {/* Input area */}
         <div className="px-4 md:px-6 pb-4 md:pb-5 pt-3 border-t border-border bg-bg-secondary/50">
           <ChatInput
             onSend={handleSend}

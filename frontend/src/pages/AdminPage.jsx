@@ -1,8 +1,10 @@
+// src/pages/AdminPage.jsx
 import { useState, useEffect, useRef } from "react"
 import {
   Users, FileText, MessageSquare, Shield, ArrowLeft,
   RefreshCw, FolderOpen, X, Send, ChevronRight, File,
-  Eye, Globe
+  Eye, Globe, Upload, MessageCircle, Trash2, LogIn,
+  UserCheck, UserX, AlertCircle
 } from "lucide-react"
 import { useAuth } from "../context/AuthContext"
 
@@ -32,6 +34,56 @@ function useAdminFetch(path) {
 
   useEffect(() => { fetchData() }, [path])
   return { data, loading, error, refetch: fetchData }
+}
+
+// ─── Helpers para Audit Log ───────────────────────────────────────────────────
+const EVENT_CONFIG = {
+  upload:     { label: "Subida",        icon: Upload,      color: "text-accent-violet bg-accent-violet/10 border-accent-violet/20" },
+  chat:       { label: "Chat",          icon: MessageCircle, color: "text-accent-green bg-accent-green/10 border-accent-green/20" },
+  delete:     { label: "Eliminación",   icon: Trash2,      color: "text-red-400 bg-red-500/10 border-red-500/20" },
+  login:      { label: "Inicio sesión", icon: LogIn,       color: "text-accent-blue bg-accent-blue/10 border-accent-blue/20" },
+  activate:   { label: "Activación",    icon: UserCheck,   color: "text-green-400 bg-green-500/10 border-green-500/20" },
+  deactivate: { label: "Desactivación", icon: UserX,       color: "text-red-400 bg-red-500/10 border-red-500/20" },
+}
+
+function EventBadge({ event }) {
+  const cfg = EVENT_CONFIG[event] || { label: event, icon: AlertCircle, color: "text-text-muted bg-bg-tertiary border-border" }
+  const Icon = cfg.icon
+  return (
+    <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium border ${cfg.color}`}>
+      <Icon className="w-3 h-3" />
+      {cfg.label}
+    </span>
+  )
+}
+
+function MetadataDisplay({ metadata }) {
+  if (!metadata || Object.keys(metadata).length === 0) return <span className="text-text-muted">—</span>
+
+  // Mostrar campos más útiles primero
+  const priority = ["document_name", "query", "session_id", "type"]
+  const entries  = [
+    ...priority.filter(k => metadata[k] !== undefined).map(k => [k, metadata[k]]),
+    ...Object.entries(metadata).filter(([k]) => !priority.includes(k)),
+  ].slice(0, 3)
+
+  const labelMap = {
+    document_name: "Documento",
+    query:         "Consulta",
+    session_id:    "Sesión",
+    type:          "Tipo",
+  }
+
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {entries.map(([key, val]) => (
+        <span key={key} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs bg-bg-tertiary border border-border text-text-secondary max-w-[200px]">
+          <span className="text-text-muted flex-shrink-0">{labelMap[key] || key}:</span>
+          <span className="truncate">{String(val).slice(0, 60)}</span>
+        </span>
+      ))}
+    </div>
+  )
 }
 
 // ─── Panel lateral: documentos + chat RAG de un usuario ──────────────────────
@@ -217,10 +269,7 @@ function UserDocsPanel({ user, onClose, getToken }) {
               </div>
               {docs.length > 0 && (
                 <div className="flex flex-col gap-2 w-full max-w-sm">
-                  {[
-                    "Dame un resumen de los documentos",
-                    "¿Cuáles son los puntos más importantes?",
-                  ].map(s => (
+                  {["Dame un resumen de los documentos", "¿Cuáles son los puntos más importantes?"].map(s => (
                     <button
                       key={s}
                       onClick={() => setInput(s)}
@@ -274,11 +323,9 @@ function UserDocsPanel({ user, onClose, getToken }) {
               onChange={e => setInput(e.target.value)}
               onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend() } }}
               placeholder={
-                docs.length === 0
-                  ? "Sin documentos para consultar"
-                  : selectedDocIds.length > 0
-                  ? `Preguntando sobre ${selectedDocIds.length} doc(s)...`
-                  : "Pregunta sobre los documentos del usuario..."
+                docs.length === 0 ? "Sin documentos para consultar"
+                : selectedDocIds.length > 0 ? `Preguntando sobre ${selectedDocIds.length} doc(s)...`
+                : "Pregunta sobre los documentos del usuario..."
               }
               disabled={docs.length === 0 || sending}
               rows={1}
@@ -336,11 +383,7 @@ function GlobalChatTab({ getToken }) {
         sources: data.sources || [],
       }])
     } catch {
-      setMessages(prev => [...prev, {
-        role: "assistant",
-        content: "Error al procesar la pregunta.",
-        sources: [],
-      }])
+      setMessages(prev => [...prev, { role: "assistant", content: "Error al procesar la pregunta.", sources: [] }])
     } finally {
       setSending(false)
     }
@@ -348,7 +391,6 @@ function GlobalChatTab({ getToken }) {
 
   return (
     <div className="bg-bg-secondary border border-border rounded-xl overflow-hidden flex flex-col" style={{ height: "60vh" }}>
-      {/* Header */}
       <div className="flex items-center gap-3 px-4 py-3 border-b border-border">
         <div className="w-7 h-7 rounded-lg bg-accent-green/15 flex items-center justify-center">
           <Globe className="w-3.5 h-3.5 text-accent-green" />
@@ -359,7 +401,6 @@ function GlobalChatTab({ getToken }) {
         </div>
       </div>
 
-      {/* Mensajes */}
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full gap-4 text-center">
@@ -368,15 +409,13 @@ function GlobalChatTab({ getToken }) {
             </div>
             <div>
               <p className="text-text-primary text-sm font-medium">Análisis global de la plataforma</p>
-              <p className="text-text-muted text-xs mt-1 max-w-sm">
-                Haz preguntas que abarquen los documentos de todos los usuarios. El modelo indicará de quién es cada dato.
-              </p>
+              <p className="text-text-muted text-xs mt-1 max-w-sm">Haz preguntas que abarquen los documentos de todos los usuarios.</p>
             </div>
             <div className="flex flex-col gap-2 w-full max-w-sm">
               {[
-                "Que documentos hablan de [tu informacion]?",
+                "¿Quién tiene el mejor rendimiento según sus documentos?",
                 "Dame un resumen general de todos los documentos",
-                "¿Quien tiene mas documentos?",
+                "¿Qué usuario tiene más documentos?",
               ].map(s => (
                 <button
                   key={s}
@@ -390,7 +429,6 @@ function GlobalChatTab({ getToken }) {
             </div>
           </div>
         )}
-
         {messages.map((msg, i) => (
           <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
             <div className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
@@ -403,8 +441,7 @@ function GlobalChatTab({ getToken }) {
                 <div className="mt-2 pt-2 border-t border-border flex flex-wrap gap-2">
                   {msg.sources.map((s, idx) => (
                     <span key={idx} className="inline-flex items-center gap-1 text-xs text-text-muted bg-bg-secondary px-2 py-0.5 rounded-full border border-border">
-                      <Users className="w-3 h-3" />
-                      {s.user} · {s.doc}
+                      <Users className="w-3 h-3" />{s.user} · {s.doc}
                     </span>
                   ))}
                 </div>
@@ -412,7 +449,6 @@ function GlobalChatTab({ getToken }) {
             </div>
           </div>
         ))}
-
         {sending && (
           <div className="flex justify-start">
             <div className="bg-bg-primary border border-border rounded-2xl rounded-bl-sm px-4 py-3 flex gap-1.5">
@@ -425,7 +461,6 @@ function GlobalChatTab({ getToken }) {
         <div ref={chatEndRef} />
       </div>
 
-      {/* Input */}
       <div className="px-4 py-3 border-t border-border bg-bg-primary">
         <div className="flex gap-2 items-end">
           <textarea
@@ -455,18 +490,26 @@ function GlobalChatTab({ getToken }) {
 // ─── Página principal ─────────────────────────────────────────────────────────
 export function AdminPage({ onBack }) {
   const { getToken } = useAuth()
-  const [tab, setTab]                       = useState("users")
-  const [inspectedUser, setInspectedUser]   = useState(null)
+  const [tab, setTab]                     = useState("users")
+  const [inspectedUser, setInspectedUser] = useState(null)
 
-  const { data: stats }                                                    = useAdminFetch("/admin/stats")
-  const { data: users, loading: usersLoading, refetch: refetchUsers }      = useAdminFetch("/admin/users")
-  const { data: logs,  loading: logsLoading }                              = useAdminFetch("/admin/audit-logs?limit=50")
+  const { data: stats }                                               = useAdminFetch("/admin/stats")
+  const { data: usersRaw, loading: usersLoading, refetch: refetchUsers } = useAdminFetch("/admin/users")
+  const { data: logs, loading: logsLoading }                          = useAdminFetch("/admin/audit-logs?limit=50")
+
+  // Mapa id → nombre completo para el audit log
+  const userNameMap = {}
+  if (usersRaw) {
+    usersRaw.forEach(u => {
+      userNameMap[u.id] = `${u.first_name} ${u.last_name}`.trim()
+    })
+  }
 
   const toggleUser = async (userId, isActive) => {
     const token  = await getToken()
     const action = isActive ? "deactivate" : "activate"
     await fetch(`${import.meta.env.VITE_API_URL}/admin/users/${userId}/${action}`, {
-      method:  "PATCH",
+      method: "PATCH",
       headers: { Authorization: `Bearer ${token}` },
     })
     refetchUsers()
@@ -476,9 +519,7 @@ export function AdminPage({ onBack }) {
     <button
       onClick={() => setTab(t)}
       className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-        tab === t
-          ? "bg-accent-green text-white"
-          : "text-text-secondary hover:bg-bg-tertiary"
+        tab === t ? "bg-accent-green text-white" : "text-text-secondary hover:bg-bg-tertiary"
       }`}
     >
       {label}
@@ -500,10 +541,7 @@ export function AdminPage({ onBack }) {
               <p className="text-xs text-text-muted">Gestión de usuarios, documentos y actividad</p>
             </div>
           </div>
-          <button
-            onClick={onBack}
-            className="flex items-center gap-2 text-sm text-text-secondary hover:text-text-primary transition-colors"
-          >
+          <button onClick={onBack} className="flex items-center gap-2 text-sm text-text-secondary hover:text-text-primary transition-colors">
             <ArrowLeft className="w-4 h-4" />
             Volver
           </button>
@@ -513,9 +551,9 @@ export function AdminPage({ onBack }) {
         {stats && (
           <div className="grid grid-cols-3 gap-4 mb-8">
             {[
-              { label: "Usuarios",   value: stats.total_users,     icon: Users,         color: "text-accent-rag"    },
-              { label: "Documentos", value: stats.total_documents,  icon: FileText,      color: "text-accent-violet" },
-              { label: "Mensajes",   value: stats.total_messages,   icon: MessageSquare, color: "text-accent-green"  },
+              { label: "Usuarios",   value: stats.total_users,    icon: Users,         color: "text-accent-rag"    },
+              { label: "Documentos", value: stats.total_documents, icon: FileText,      color: "text-accent-violet" },
+              { label: "Mensajes",   value: stats.total_messages,  icon: MessageSquare, color: "text-accent-green"  },
             ].map(({ label, value, icon: Icon, color }) => (
               <div key={label} className="bg-bg-secondary border border-border rounded-xl p-5">
                 <Icon className={`w-5 h-5 mb-3 ${color}`} />
@@ -554,7 +592,7 @@ export function AdminPage({ onBack }) {
                 <tbody className="divide-y divide-border">
                   {usersLoading ? (
                     <tr><td colSpan={5} className="px-4 py-8 text-center text-text-muted text-sm">Cargando usuarios...</td></tr>
-                  ) : users?.map(u => (
+                  ) : usersRaw?.map(u => (
                     <tr key={u.id} className="hover:bg-bg-tertiary/50 transition-colors">
                       <td className="px-4 py-3 font-medium text-text-primary">
                         {u.first_name} {u.last_name}
@@ -562,16 +600,12 @@ export function AdminPage({ onBack }) {
                       </td>
                       <td className="px-4 py-3 text-text-secondary">{u.document_count}</td>
                       <td className="px-4 py-3">
-                        <span className={`px-2 py-1 rounded text-xs font-medium ${
-                          u.role === "admin" ? "bg-accent-green/20 text-accent-green" : "bg-bg-tertiary text-text-muted"
-                        }`}>
+                        <span className={`px-2 py-1 rounded text-xs font-medium ${u.role === "admin" ? "bg-accent-green/20 text-accent-green" : "bg-bg-tertiary text-text-muted"}`}>
                           {u.role || "user"}
                         </span>
                       </td>
                       <td className="px-4 py-3">
-                        <span className={`px-2 py-1 rounded text-xs font-medium ${
-                          u.active !== false ? "bg-green-500/20 text-green-400" : "bg-red-500/20 text-red-400"
-                        }`}>
+                        <span className={`px-2 py-1 rounded text-xs font-medium ${u.active !== false ? "bg-green-500/20 text-green-400" : "bg-red-500/20 text-red-400"}`}>
                           {u.active !== false ? "Activo" : "Inactivo"}
                         </span>
                       </td>
@@ -606,38 +640,52 @@ export function AdminPage({ onBack }) {
           </div>
         )}
 
-        {/* Tab Audit Log */}
+        {/* Tab Audit Log — mejorado */}
         {tab === "logs" && (
           <div className="bg-bg-secondary border border-border rounded-xl overflow-hidden">
-            <div className="px-4 py-3 border-b border-border">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-border">
               <span className="text-sm font-medium text-text-primary">Últimos 50 eventos</span>
+              <span className="text-xs text-text-muted">{logs?.length ?? 0} registros</span>
             </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-bg-tertiary">
-                  <tr>
-                    {["Fecha", "Usuario", "Acción", "Detalle"].map(h => (
-                      <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-text-muted uppercase tracking-wide">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {logsLoading ? (
-                    <tr><td colSpan={4} className="px-4 py-8 text-center text-text-muted text-sm">Cargando logs...</td></tr>
-                  ) : logs?.map((log, i) => (
-                    <tr key={i} className="hover:bg-bg-tertiary/50 transition-colors">
-                      <td className="px-4 py-3 text-text-muted text-xs whitespace-nowrap">
-                        {new Date(log.created_at).toLocaleString("es-HN")}
-                      </td>
-                      <td className="px-4 py-3 text-text-muted text-xs">{log.user_id?.slice(0, 8)}…</td>
-                      <td className="px-4 py-3 font-medium text-text-primary">{log.action}</td>
-                      <td className="px-4 py-3 text-text-muted text-xs max-w-xs truncate">
-                        {typeof log.details === "object" ? JSON.stringify(log.details) : log.details}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="divide-y divide-border">
+              {logsLoading ? (
+                <div className="px-4 py-8 text-center text-text-muted text-sm">Cargando logs...</div>
+              ) : logs?.length === 0 ? (
+                <div className="px-4 py-8 text-center text-text-muted text-sm">Sin eventos registrados.</div>
+              ) : logs?.map((log, i) => {
+                const name = userNameMap[log.user_id] || null
+                return (
+                  <div key={i} className="px-4 py-3 hover:bg-bg-tertiary/50 transition-colors flex items-start gap-4">
+                    {/* Evento */}
+                    <div className="flex-shrink-0 pt-0.5">
+                      <EventBadge event={log.event} />
+                    </div>
+
+                    {/* Usuario */}
+                    <div className="flex-shrink-0 min-w-[120px]">
+                      {name ? (
+                        <p className="text-xs font-medium text-text-primary">{name}</p>
+                      ) : null}
+                      <p className="text-xs text-text-muted">{log.user_id?.slice(0, 8)}…</p>
+                    </div>
+
+                    {/* Metadata */}
+                    <div className="flex-1 min-w-0">
+                      <MetadataDisplay metadata={log.metadata} />
+                    </div>
+
+                    {/* Fecha */}
+                    <div className="flex-shrink-0 text-right">
+                      <p className="text-xs text-text-muted whitespace-nowrap">
+                        {new Date(log.created_at).toLocaleDateString("es-HN", { day: "2-digit", month: "short" })}
+                      </p>
+                      <p className="text-xs text-text-muted whitespace-nowrap">
+                        {new Date(log.created_at).toLocaleTimeString("es-HN", { hour: "2-digit", minute: "2-digit" })}
+                      </p>
+                    </div>
+                  </div>
+                )
+              })}
             </div>
           </div>
         )}
@@ -647,7 +695,6 @@ export function AdminPage({ onBack }) {
 
       </div>
 
-      {/* Panel lateral */}
       {inspectedUser && (
         <UserDocsPanel
           user={inspectedUser}

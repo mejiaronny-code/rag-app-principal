@@ -1,19 +1,22 @@
+// src/context/AuthContext.jsx
 import { createContext, useContext, useEffect, useState } from 'react'
 import { supabase } from '../supabase'
 
 const AuthContext = createContext(null)
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null)
-  const [profile, setProfile] = useState(null)
-  const [loading, setLoading] = useState(true)
+  const [user, setUser]               = useState(null)
+  const [profile, setProfile]         = useState(null)
+  const [loading, setLoading]         = useState(true)
+  const [transitioning, setTransitioning] = useState(false)   // ← nuevo
+  const [transitionMsg, setTransitionMsg] = useState("Cargando...") // ← nuevo
 
   const fetchProfile = async (userId) => {
     const { data } = await supabase
       .from('profiles')
       .select('first_name, last_name')
       .eq('id', userId)
-      .maybeSingle()  // ← cambia .single() por .maybeSingle()
+      .maybeSingle()
     setProfile(data)
   }
 
@@ -36,29 +39,59 @@ export function AuthProvider({ children }) {
   }, [])
 
   const signIn = async (email, password) => {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
-    if (error) throw error
-    return data
+    setTransitionMsg("Iniciando sesión...")
+    setTransitioning(true)
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+      if (error) throw error
+      // Pequeña pausa para que la transición se vea fluida
+      await new Promise(r => setTimeout(r, 600))
+      return data
+    } finally {
+      setTransitioning(false)
+    }
   }
 
   const signUp = async (email, password, firstName, lastName) => {
-    const { data, error } = await supabase.auth.signUp({ email, password })
-    if (error) throw error
-
-    // Guardar nombre en profiles
-    if (data.user) {
-      await supabase.from('profiles').insert({
-        id: data.user.id,
-        first_name: firstName,
-        last_name: lastName,
-      })
+    setTransitionMsg("Creando cuenta...")
+    setTransitioning(true)
+    try {
+      const { data, error } = await supabase.auth.signUp({ email, password })
+      if (error) throw error
+      if (data.user) {
+        await supabase.from('profiles').insert({
+          id: data.user.id,
+          first_name: firstName,
+          last_name: lastName,
+        })
+      }
+      await new Promise(r => setTimeout(r, 600))
+      return data
+    } finally {
+      setTransitioning(false)
     }
-    return data
   }
 
   const signOut = async () => {
+    setTransitionMsg("Cerrando sesión...")
+    setTransitioning(true)
+    await new Promise(r => setTimeout(r, 500))
     await supabase.auth.signOut()
     setProfile(null)
+    await new Promise(r => setTimeout(r, 300))
+    setTransitioning(false)
+  }
+
+  // Helper para transiciones manuales (nueva sesión, abrir admin, etc.)
+  const withTransition = async (msg, fn) => {
+    setTransitionMsg(msg)
+    setTransitioning(true)
+    try {
+      await fn()
+      await new Promise(r => setTimeout(r, 400))
+    } finally {
+      setTransitioning(false)
+    }
   }
 
   const getToken = async () => {
@@ -71,7 +104,12 @@ export function AuthProvider({ children }) {
     : user?.email?.split('@')[0] ?? ''
 
   return (
-    <AuthContext.Provider value={{ user, profile, fullName, loading, signIn, signUp, signOut, getToken }}>
+    <AuthContext.Provider value={{
+      user, profile, fullName, loading,
+      transitioning, transitionMsg,
+      signIn, signUp, signOut, getToken,
+      withTransition,
+    }}>
       {children}
     </AuthContext.Provider>
   )
