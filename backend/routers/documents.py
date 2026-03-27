@@ -5,6 +5,7 @@ from slowapi.util import get_remote_address
 import uuid as uuid_lib
 import logging
 from typing import Optional
+import time
 
 from config import get_settings
 from db.supabase_client import get_supabase_client
@@ -174,6 +175,9 @@ def _save_and_embed(
     user_id: Optional[str] = None,
 ) -> str:
     storage_path = None
+    doc_id       = None   # ← NUEVO: necesario para el cleanup
+
+    # ── 1. Subir archivo a Storage ─────────────────────────────────────────
     if file_bytes and file_extension:
         try:
             storage_path = f"{session_id}/{uuid_lib.uuid4()}.{file_extension}"
@@ -186,39 +190,123 @@ def _save_and_embed(
             logger.warning(f"No se pudo subir a Storage: {e}")
             storage_path = None
 
-    doc_result = supabase.table("documents").insert({
-        "session_id": session_id,
-        "user_id":    user_id,
-        "name":       name,
-        "type":       doc_type,
-        "source_url": source_url,
-        "storage_path": storage_path,
-    }).execute()
+    # ── 2. Insertar documento en DB ────────────────────────────────────────
+    try:
+        doc_result = supabase.table("documents").insert({
+            "session_id":   session_id,
+            "user_id":      user_id,
+            "name":         name,
+            "type":         doc_type,
+            "source_url":   source_url,
+            "storage_path": storage_path,
+        }).execute()
+        doc_id = doc_result.data[0]["id"]
+    except Exception as e:
+        # Si no se pudo insertar el documento, limpiar Storage y abortar
+        if storage_path:
+            try:
+                supabase.storage.from_("documents").remove([storage_path])
+            except Exception:
+                pass
+        raise HTTPException(status_code=500, detail=f"Error guardando el documento: {e}")
 
-    doc_id = doc_result.data[0]["id"]
-
+    # ── 3. Generar embeddings con retry por chunk ──────────────────────────
     logger.info(f"Generando embeddings para {len(chunks)} chunks de '{name}'...")
-    embeddings = get_embeddings_batch(chunks)
 
-    embedding_rows = [
-        {
-            "document_id": str(doc_id),
-            "session_id":  session_id,
-            "user_id":     user_id,
-            "content":     chunk,
-            "embedding":   emb,
-            "chunk_index": i,
-        }
-        for i, (chunk, emb) in enumerate(zip(chunks, embeddings))
-    ]
+    embedding_rows = []
+    failed_chunks  = []
 
-    batch_size = 50
-    for i in range(0, len(embedding_rows), batch_size):
-        supabase.table("embeddings").insert(embedding_rows[i:i + batch_size]).execute()
+    for i, chunk in enumerate(chunks):
+        emb = _embed_with_retry(chunk, max_retries=3, wait_seconds=2.0)
+        if emb is None:
+            failed_chunks.append(i)
+        else:
+            embedding_rows.append({
+                "document_id": str(doc_id),
+                "session_id":  session_id,
+                "user_id":     user_id,
+                "content":     chunk,
+                "embedding":   emb,
+                "chunk_index": i,
+            })
 
-    logger.info(f"Documento '{name}' indexado con {len(chunks)} chunks.")
+    # Si más de la mitad de los chunks fallaron, abortar con cleanup total
+    if len(failed_chunks) > len(chunks) / 2:
+        logger.error(
+            f"Demasiados chunks fallidos ({len(failed_chunks)}/{len(chunks)}) "
+            f"para '{name}'. Haciendo cleanup."
+        )
+        _cleanup_document(supabase, doc_id, storage_path)
+        raise HTTPException(
+            status_code=500,
+            detail="Error generando embeddings. El documento no fue indexado. Intenta de nuevo."
+        )
+
+    if failed_chunks:
+        logger.warning(
+            f"'{name}': {len(failed_chunks)} chunks no pudieron indexarse "
+            f"(índices: {failed_chunks}). El documento se guardó parcialmente."
+        )
+
+    # ── 4. Insertar embeddings en lotes ────────────────────────────────────
+    if not embedding_rows:
+        _cleanup_document(supabase, doc_id, storage_path)
+        raise HTTPException(
+            status_code=500,
+            detail="No se pudo generar ningún embedding. El documento no fue indexado."
+        )
+
+    try:
+        batch_size = 50
+        for i in range(0, len(embedding_rows), batch_size):
+            supabase.table("embeddings").insert(
+                embedding_rows[i:i + batch_size]
+            ).execute()
+    except Exception as e:
+        logger.error(f"Error insertando embeddings para '{name}': {e}. Haciendo cleanup.")
+        _cleanup_document(supabase, doc_id, storage_path)
+        raise HTTPException(
+            status_code=500,
+            detail="Error guardando los embeddings. El documento no fue indexado."
+        )
+
+    logger.info(f"Documento '{name}' indexado con {len(embedding_rows)} chunks.")
     return doc_id
 
+
+def _embed_with_retry(text: str, max_retries: int = 3, wait_seconds: float = 2.0):
+    """Intenta generar el embedding hasta max_retries veces. Retorna None si falla todo."""
+    from services.embeddings import get_embedding
+    for attempt in range(max_retries):
+        try:
+            return get_embedding(text)
+        except Exception as e:
+            if attempt < max_retries - 1:
+                logger.warning(
+                    f"Embedding falló (intento {attempt + 1}/{max_retries}): {e}. "
+                    f"Reintentando en {wait_seconds}s..."
+                )
+                time.sleep(wait_seconds)
+            else:
+                logger.error(f"Embedding falló después de {max_retries} intentos: {e}")
+    return None
+
+
+def _cleanup_document(supabase, doc_id: str, storage_path: Optional[str]):
+    """Elimina documento, sus embeddings y el archivo en Storage."""
+    try:
+        supabase.table("embeddings").delete().eq("document_id", str(doc_id)).execute()
+    except Exception as e:
+        logger.warning(f"Cleanup embeddings falló para doc {doc_id}: {e}")
+    try:
+        supabase.table("documents").delete().eq("id", str(doc_id)).execute()
+    except Exception as e:
+        logger.warning(f"Cleanup documento falló para doc {doc_id}: {e}")
+    if storage_path:
+        try:
+            supabase.storage.from_("documents").remove([storage_path])
+        except Exception as e:
+            logger.warning(f"Cleanup Storage falló para {storage_path}: {e}")
 
 def _get_mime_type(extension: str) -> str:
     mime_types = {

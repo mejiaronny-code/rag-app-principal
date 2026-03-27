@@ -8,7 +8,7 @@ const api = axios.create({
   timeout: 60000,
 })
 
-// Interceptor — agrega el token JWT en cada request
+// Interceptor de REQUEST — agrega el token JWT en cada request
 api.interceptors.request.use(async (config) => {
   const { data: { session } } = await supabase.auth.getSession()
   if (session?.access_token) {
@@ -16,6 +16,20 @@ api.interceptors.request.use(async (config) => {
   }
   return config
 })
+
+// ← NUEVO: Interceptor de RESPONSE — maneja 401 globalmente
+api.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    if (error.response?.status === 401) {
+      // Token expirado o inválido — limpiar sesión y redirigir al login
+      await supabase.auth.signOut()
+      // Redirigir sin depender de React Router (funciona desde cualquier contexto)
+      window.location.href = '/login'
+    }
+    return Promise.reject(error)
+  }
+)
 
 // ── Documents ──────────────────────────────────────────────────────────────
 
@@ -90,7 +104,8 @@ export async function deleteSession(sessionId) {
 
 export default api
 
-// ── Conversations ──────────────────────────────────────────
+// ── Conversations ──────────────────────────────────────────────────────────
+
 export async function getConversations() {
   const response = await api.get('/conversations')
   return response.data

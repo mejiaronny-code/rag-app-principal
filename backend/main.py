@@ -49,7 +49,19 @@ app.include_router(admin.router, tags=["admin"])
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "environment": settings.ENVIRONMENT}
+    checks = {"api": "ok", "environment": settings.ENVIRONMENT}
+
+    # Verificar que Supabase responde realmente
+    try:
+        from db.supabase_client import get_supabase_client
+        supabase = get_supabase_client()
+        supabase.table("profiles").select("id").limit(1).execute()
+        checks["database"] = "ok"
+    except Exception as e:
+        checks["database"] = f"error: {str(e)}"
+
+    status_code = 200 if all(v == "ok" or k == "environment" for k, v in checks.items()) else 503
+    return JSONResponse(content=checks, status_code=status_code)
 
 
 @app.exception_handler(Exception)

@@ -21,7 +21,10 @@ ADMIN_GLOBAL_DOC_LIMIT = 200                                         # ← NUEVO
 # ─── Groq client ─────────────────────────────────────────────────────────────
 def _get_groq_client():
     settings = get_settings()
-    return Groq(api_key=settings.GROQ_API_KEY)
+    return Groq(
+    api_key=settings.GROQ_API_KEY,
+    timeout=30.0,
+    )
 
 
 # ─── Dependencia: solo admins ─────────────────────────────────────────────────

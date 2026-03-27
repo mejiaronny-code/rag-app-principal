@@ -3,8 +3,6 @@ from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 from slowapi import Limiter
 from slowapi.util import get_remote_address
-from google import genai
-from google.genai import types
 import logging
 import json
 from groq import Groq
@@ -19,25 +17,32 @@ logger = logging.getLogger(__name__)
 limiter = Limiter(key_func=get_remote_address)
 router = APIRouter()
 
+# ← NUEVO: timeout para Groq (segundos)
+GROQ_TIMEOUT = 30.0
+
 @traceable(name="rag_pipeline")
 def _run_rag_pipeline(query, session_id, chat_history, document_ids, conversation_id, user_id):
-    """Función traceable que engloba todo el pipeline RAG."""
-    pass  # Lo usamos como wrapper
+    pass
 
 def _get_client():
     settings = get_settings()
-    return Groq(api_key=settings.GROQ_API_KEY)
+    return Groq(
+        api_key=settings.GROQ_API_KEY,
+        timeout=GROQ_TIMEOUT,    # ← NUEVO
+    )
 
 
 class ChatMessage(BaseModel):
     role: str
     content: str
 
+# ← ELIMINADA la definición duplicada de ChatRequest que había antes
 class ChatRequest(BaseModel):
     query: str = Field(..., min_length=1, max_length=2000)
     session_id: str = Field(..., min_length=1)
     chat_history: List[ChatMessage] = Field(default_factory=list)
     document_ids: List[str] = Field(default_factory=list)
+    conversation_id: Optional[str] = None
 
 class SourceCard(BaseModel):
     document_name: str
@@ -50,12 +55,6 @@ class ChatResponse(BaseModel):
     sources: List[SourceCard]
     session_id: str
 
-class ChatRequest(BaseModel):
-    query: str = Field(..., min_length=1, max_length=2000)
-    session_id: str = Field(..., min_length=1)
-    chat_history: List[ChatMessage] = Field(default_factory=list)
-    document_ids: List[str] = Field(default_factory=list)
-    conversation_id: Optional[str] = None  # ← nuevo
 
 RAG_SYSTEM_PROMPT = """Eres un asistente inteligente y útil. Tu función es responder preguntas 
 basándote EXCLUSIVAMENTE en el contexto proporcionado por los documentos del usuario.
@@ -108,7 +107,7 @@ async def chat(
         )
         answer = response.choices[0].message.content.strip()
     except Exception as e:
-        logger.exception("Error generando respuesta con Gemini")
+        logger.exception("Error generando respuesta con Groq")
         raise HTTPException(status_code=500, detail=f"Error del modelo: {e}")
 
     sources = _build_source_cards(retrieved_chunks)
@@ -158,7 +157,7 @@ def _build_source_cards(chunks: List[Dict[str, Any]]) -> List[SourceCard]:
     seen = set()
     for chunk in chunks:
         doc_name = chunk.get("document_name", "Desconocido")
-        content = chunk.get("content", "")
+        content  = chunk.get("content", "")
         key = (doc_name, content[:100])
         if key in seen:
             continue
