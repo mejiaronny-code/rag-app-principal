@@ -6,6 +6,8 @@ import uuid as uuid_lib
 import logging
 from typing import Optional
 import time
+import asyncio
+from functools import partial
 
 from config import get_settings
 from db.supabase_client import get_supabase_client
@@ -101,10 +103,13 @@ async def upload_document(
         splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
         chunks = splitter.split_text(text)
 
-        doc_id = _save_and_embed(
-            supabase, session_id, doc_name, doc_type, chunks,
-            source_url=url,
-            user_id=user["id"],
+        doc_id = await asyncio.to_thread(
+            partial(
+                _save_and_embed,
+                supabase, session_id, doc_name, doc_type, chunks,
+                source_url=url,
+                user_id=user["id"],
+            )
         )
         log_event(user["id"], "upload", {"document_name": doc_name, "type": doc_type})
         return JSONResponse({
@@ -145,11 +150,14 @@ async def upload_document(
         logger.exception(f"Error procesando documento {filename}")
         raise HTTPException(status_code=500, detail=f"Error procesando el documento: {e}")
 
-    doc_id = _save_and_embed(
-        supabase, session_id, filename, doc_type, chunks,
-        file_bytes=content,
-        file_extension=extension,
-        user_id=user["id"],
+    doc_id = await asyncio.to_thread(
+        partial(
+            _save_and_embed,
+            supabase, session_id, filename, doc_type, chunks,
+            file_bytes=content,
+            file_extension=extension,
+            user_id=user["id"],
+        )
     )
     log_event(user["id"], "upload", {"document_name": filename, "type": doc_type})
 

@@ -91,7 +91,7 @@ export function LoginPage() {
             <Sparkles className="w-8 h-8" style={{ color: 'var(--accent-green)' }} />
           </div>
           <h1 className="text-2xl font-bold" style={{ color: 'var(--accent-green)' }}>
-            RAG Chat
+            Papyrus
           </h1>
           <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>
             {mode === 'login' ? 'Bienvenido de vuelta' : 'Crea tu cuenta gratis'}

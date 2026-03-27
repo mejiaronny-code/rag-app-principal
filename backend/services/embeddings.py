@@ -1,11 +1,13 @@
 import httpx
+from functools import lru_cache
 from config import get_settings
 from typing import List
 from langsmith import traceable
 
 EMBEDDING_MODEL = "gemini-embedding-001"
-EMBEDDING_DIMS = 3072   
-BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
+EMBEDDING_DIMS  = 3072
+BASE_URL        = "https://generativelanguage.googleapis.com/v1beta/models"
+
 
 def _embed(text: str, task_type: str) -> List[float]:
     settings = get_settings()
@@ -20,12 +22,21 @@ def _embed(text: str, task_type: str) -> List[float]:
     return response.json()["embedding"]["values"]
 
 
+# ← NUEVO: mismo texto = mismo embedding siempre → lru_cache es seguro aquí
+# maxsize=512 ≈ 2MB de RAM máximo (cada embedding es ~24KB)
+@lru_cache(maxsize=512)
+def _embed_cached(text: str, task_type: str) -> tuple:
+    """Versión cacheada de _embed. Retorna tuple (hashable) para que lru_cache funcione."""
+    return tuple(_embed(text, task_type))
+
+
 def get_embedding(text: str) -> List[float]:
-    return _embed(text, "RETRIEVAL_DOCUMENT")
+    return list(_embed_cached(text, "RETRIEVAL_DOCUMENT"))
+
 
 @traceable(name="get_query_embedding")
 def get_query_embedding(text: str) -> List[float]:
-    return _embed(text, "RETRIEVAL_QUERY")
+    return list(_embed_cached(text, "RETRIEVAL_QUERY"))
 
 
 def get_embeddings_batch(texts: List[str]) -> List[List[float]]:

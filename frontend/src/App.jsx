@@ -1,5 +1,4 @@
-// src/App.jsx
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import { useSession } from './hooks/useSession'
 import { useDocuments } from './hooks/useDocuments'
 import { useChat } from './hooks/useChat'
@@ -9,18 +8,19 @@ import { ChatMessage } from './components/ChatMessage'
 import { ChatInput } from './components/ChatInput'
 import { TypingIndicator } from './components/TypingIndicator'
 import { EmptyState } from './components/EmptyState'
-import { LoadingScreen } from './components/LoadingScreen'   // ← nuevo
+import { LoadingScreen } from './components/LoadingScreen'
 import { useTheme } from './hooks/useTheme'
 import { useAuth } from './context/AuthContext'
 import { LoginPage } from './pages/LoginPage'
 import { LogOut, Menu, Shield } from 'lucide-react'
 import { useConversations } from './hooks/useConversations'
 import { AdminPage } from './pages/AdminPage'
+import { useInactivityLogout } from './hooks/useInactivityLogout'  // ← NUEVO
 
 export default function App() {
   const {
     user, loading: authLoading, signOut, fullName,
-    transitioning, transitionMsg, withTransition,  // ← nuevo
+    transitioning, transitionMsg, withTransition,
   } = useAuth()
   const { theme, toggleTheme }  = useTheme()
   const { sessionId, createNewSession } = useSession(user?.id)
@@ -40,10 +40,25 @@ export default function App() {
   } = useChat(sessionId, activeConversationId, loadConversationMessages)
   const { selectedIds, allSelected, activeIds, toggle, selectAll } = useDocumentSelection(documents)
   const messagesEndRef = useRef(null)
-  const [sidebarOpen, setSidebarOpen]   = useState(false)
-  const [showAdmin, setShowAdmin]       = useState(false)
+  const [sidebarOpen, setSidebarOpen]     = useState(false)
+  const [showAdmin, setShowAdmin]         = useState(false)
+  const [sessionExpired, setSessionExpired] = useState(false)  // ← NUEVO
   const { getToken } = useAuth()
-  const [isAdmin, setIsAdmin]           = useState(false)
+  const [isAdmin, setIsAdmin] = useState(false)
+
+  // ── Timeout por inactividad ───────────────────────────────────────────────
+  // ← NUEVO: se activa solo cuando hay usuario autenticado
+  const handleInactivityTimeout = useCallback(() => {
+    setSessionExpired(true)
+  }, [])
+
+  useInactivityLogout(handleInactivityTimeout, !!user)
+
+  // ── Handler para cerrar sesión desde el overlay de expiración ─────────────
+  const handleExpiredSignOut = useCallback(async () => {
+    setSessionExpired(false)
+    await signOut()
+  }, [signOut])
 
   useEffect(() => {
     if (!user) return
@@ -58,14 +73,75 @@ export default function App() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, chatLoading])
 
-  // ── Pantalla de carga global ─────────────────────────────────────────────
+  // ── Overlay de sesión expirada ────────────────────────────────────────────
+  // ← NUEVO: se muestra encima de todo cuando hay inactividad
+  if (sessionExpired) {
+    return (
+      <div
+        style={{
+          position: 'fixed', inset: 0, zIndex: 9999,
+          backgroundColor: 'var(--bg-primary)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          padding: '1.5rem',
+        }}
+      >
+        <div
+          style={{
+            backgroundColor: 'var(--bg-card)',
+            border: '1px solid var(--border)',
+            borderRadius: '1rem',
+            padding: '2.5rem 2rem',
+            maxWidth: '400px',
+            width: '100%',
+            textAlign: 'center',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '1.25rem',
+          }}
+        >
+          {/* Icono */}
+          <div style={{ fontSize: '2.5rem' }}>🔒</div>
+
+          {/* Título */}
+          <h2 style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '1.2rem', margin: 0 }}>
+            Sesión expirada
+          </h2>
+
+          {/* Mensaje */}
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', lineHeight: 1.6, margin: 0 }}>
+            Tu sesión cerró automáticamente por 2 horas de inactividad.
+            Vuelve a iniciar sesión para continuar.
+          </p>
+
+          {/* Botón */}
+          <button
+            onClick={handleExpiredSignOut}
+            style={{
+              backgroundColor: 'var(--accent-green)',
+              color: '#fff',
+              border: 'none',
+              borderRadius: '0.6rem',
+              padding: '0.75rem 1.5rem',
+              fontWeight: 600,
+              fontSize: '0.9rem',
+              cursor: 'pointer',
+              transition: 'opacity 0.2s',
+            }}
+            onMouseEnter={e => e.target.style.opacity = '0.85'}
+            onMouseLeave={e => e.target.style.opacity = '1'}
+          >
+            Volver al inicio de sesión
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  // ── Pantalla de carga global ──────────────────────────────────────────────
   if (transitioning) return <LoadingScreen message={transitionMsg} />
-
-  if (showAdmin) return <AdminPage onBack={() => setShowAdmin(false)} />
-
-  if (authLoading) return <LoadingScreen message="Cargando..." />
-
-  if (!user) return <LoginPage />
+  if (showAdmin)     return <AdminPage onBack={() => setShowAdmin(false)} />
+  if (authLoading)   return <LoadingScreen message="Cargando..." />
+  if (!user)         return <LoginPage />
 
   // ── Handlers ─────────────────────────────────────────────────────────────
   const handleNewSession = async () => {
@@ -152,7 +228,6 @@ export default function App() {
       />
 
       <main className="flex flex-col flex-1 min-w-0 h-full">
-        {/* Top bar */}
         <header className="app-header flex items-center justify-between px-4 md:px-6 py-3.5">
           <div className="flex items-center gap-3 min-w-0">
             <button

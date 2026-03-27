@@ -59,21 +59,25 @@ async def get_stats(request: Request, admin=Depends(require_admin)): # ← NUEVO
 
 # ─── Usuarios ─────────────────────────────────────────────────────────────────
 @router.get("/users")
-@limiter.limit(ADMIN_READ_RATE)                                      # ← NUEVO
-async def list_users(request: Request, admin=Depends(require_admin)): # ← NUEVO: request: Request
+@limiter.limit(ADMIN_READ_RATE)
+async def list_users(request: Request, admin=Depends(require_admin)):
     supabase = get_supabase_client()
+
+    # ← ANTES: 1 query por usuario para contar documentos (N+1)
+    # ← AHORA: 2 queries totales sin importar cuántos usuarios haya
+
     profiles = supabase.table("profiles").select("*").execute().data
-    result = []
-    for p in profiles:
-        doc_count = (
-            supabase.table("documents")
-            .select("id", count="exact")
-            .eq("user_id", p["id"])
-            .execute()
-            .count
-        )
-        result.append({**p, "document_count": doc_count})
-    return result
+
+    # Trae todos los user_id de documentos en una sola query
+    all_docs = supabase.table("documents").select("user_id").execute().data
+
+    # Cuenta en Python — O(n) sin llamadas adicionales a la DB
+    doc_counts = {}
+    for d in all_docs:
+        uid = d["user_id"]
+        doc_counts[uid] = doc_counts.get(uid, 0) + 1
+
+    return [{**p, "document_count": doc_counts.get(p["id"], 0)} for p in profiles]
 
 
 @router.patch("/users/{user_id}/deactivate")
