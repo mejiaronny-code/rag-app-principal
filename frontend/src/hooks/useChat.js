@@ -1,7 +1,6 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { sendChat } from '../api'
 
-// Mapa de errores HTTP → mensajes amigables
 const ERROR_MESSAGES = {
   401: "Tu sesión expiró. Por favor vuelve a iniciar sesión.",
   403: "No tienes permiso para realizar esta acción.",
@@ -13,10 +12,8 @@ const ERROR_MESSAGES = {
 
 const getFriendlyError = (e) => {
   if (!navigator.onLine) return "Sin conexión a internet. Revisa tu red e intenta de nuevo."
-  
   const status = e.response?.status
   const detail = e.response?.data?.detail
-
   if (status && ERROR_MESSAGES[status]) return ERROR_MESSAGES[status]
   if (detail) return detail
   return "Algo salió mal. Intenta de nuevo o contacta soporte si el problema persiste."
@@ -24,15 +21,27 @@ const getFriendlyError = (e) => {
 
 export function useChat(sessionId, conversationId, loadConversationMessages) {
   const [messages, setMessages] = useState([])
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState(null)
+  const [loading, setLoading]   = useState(false)
+  const [error, setError]       = useState(null)
+
+  // ← NUEVO: ref para detectar respuestas obsoletas (race condition)
+  const currentConvIdRef = useRef(conversationId)
+  useEffect(() => {
+    currentConvIdRef.current = conversationId
+  }, [conversationId])
 
   useEffect(() => {
     if (!conversationId || !loadConversationMessages) {
       setMessages([])
       return
     }
-    loadConversationMessages(conversationId).then(setMessages)
+
+    // ← NUEVO: cancelar si la conversación cambió antes de que resuelva
+    let cancelled = false
+    loadConversationMessages(conversationId).then(msgs => {
+      if (!cancelled) setMessages(msgs ?? [])
+    })
+    return () => { cancelled = true }
   }, [conversationId])
 
   const sendMessage = useCallback(async (query, documentIds = [], overrideConvId = null) => {
@@ -41,10 +50,10 @@ export function useChat(sessionId, conversationId, loadConversationMessages) {
     const effectiveConvId = overrideConvId || conversationId
 
     const userMessage = {
-      id: `user-${Date.now()}`,
-      role: 'user',
-      content: query,
-      sources: [],
+      id:        `user-${Date.now()}`,
+      role:      'user',
+      content:   query,
+      sources:   [],
       timestamp: new Date().toISOString(),
     }
 
@@ -56,29 +65,31 @@ export function useChat(sessionId, conversationId, loadConversationMessages) {
 
     try {
       const data = await sendChat(sessionId, query, apiHistory, documentIds, effectiveConvId)
+
+      // ← NUEVO: descartar respuesta si el usuario cambió de conversación mientras esperaba
+      if (effectiveConvId !== currentConvIdRef.current) return
+
       const assistantMessage = {
-        id: `assistant-${Date.now()}`,
-        role: 'assistant',
-        content: data.answer,
-        sources: data.sources || [],
+        id:        `assistant-${Date.now()}`,
+        role:      'assistant',
+        content:   data.answer,
+        sources:   data.sources || [],
         timestamp: new Date().toISOString(),
       }
       setMessages(prev => [...prev, assistantMessage])
       return assistantMessage
     } catch (e) {
-      // ← ÚNICO CAMBIO: reemplaza las 3 líneas del catch anterior
+      // Descartar error si ya no estamos en esta conversación
+      if (effectiveConvId !== currentConvIdRef.current) return
       const friendly = getFriendlyError(e)
       setError(friendly)
       setMessages(prev => prev.filter(m => m.id !== userMessage.id))
-      // No relanzamos el error — el componente lo muestra via `error`
     } finally {
       setLoading(false)
     }
   }, [sessionId, conversationId, messages, loading])
 
-  const clearMessages = useCallback(() => {
-    setMessages([])
-  }, [])
+  const clearMessages = useCallback(() => setMessages([]), [])
 
   return { messages, loading, error, clearMessages, sendMessage }
 }

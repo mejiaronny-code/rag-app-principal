@@ -4,7 +4,8 @@ from services.auth import get_current_user
 from services.retriever import retrieve_context
 from db.supabase_client import get_supabase_client
 from config import get_settings
-from limiter import limiter                          # ← NUEVO
+from limiter import limiter 
+from services.email import send_approval_email                         # ← NUEVO
 from groq import Groq
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -93,15 +94,43 @@ async def deactivate_user(
 
 
 @router.patch("/users/{user_id}/activate")
-@limiter.limit(ADMIN_WRITE_RATE)                                     # ← NUEVO
+@limiter.limit(ADMIN_WRITE_RATE)
 async def activate_user(
-    request: Request,                                                 # ← NUEVO
+    request: Request,
     user_id: str,
     admin=Depends(require_admin),
 ):
     supabase = get_supabase_client()
+
+    # Obtener datos del usuario antes de activar
+    profile = (
+        supabase.table("profiles")
+        .select("first_name, last_name")
+        .eq("id", user_id)
+        .maybe_single()
+        .execute()
+    )
+
+    # Obtener email desde auth
+    try:
+        auth_user = supabase.auth.admin.get_user_by_id(user_id)
+        user_email = auth_user.user.email if auth_user.user else None
+    except Exception:
+        user_email = None
+
+    # Activar en DB
     supabase.table("profiles").update({"active": True}).eq("id", user_id).execute()
-    return {"message": f"Usuario {user_id} activado."}
+
+    # Enviar email de aprobación (no bloquea si falla)
+    email_sent = False
+    if user_email and profile.data:
+        first_name = profile.data.get("first_name", "Usuario")
+        email_sent = send_approval_email(user_email, first_name)
+
+    return {
+        "message":    f"Usuario {user_id} activado.",
+        "email_sent": email_sent,
+    }
 
 
 # ─── Documentos de un usuario ────────────────────────────────────────────────
@@ -354,3 +383,53 @@ async def get_audit_logs(
         .data
     )
     return logs
+
+@router.delete("/users/{user_id}")
+@limiter.limit(ADMIN_WRITE_RATE)
+async def delete_user(
+    request: Request,
+    user_id: str,
+    admin=Depends(require_admin),
+):
+    """
+    Elimina un usuario y TODOS sus datos:
+    embeddings → documents → chat_history → conversations → audit_logs → profiles → auth
+    El orden importa por las foreign keys.
+    """
+    supabase = get_supabase_client()
+
+    # 1. Embeddings (dependen de documents)
+    doc_rows = (
+        supabase.table("documents")
+        .select("id")
+        .eq("user_id", user_id)
+        .execute()
+        .data
+    )
+    doc_ids = [d["id"] for d in doc_rows]
+    if doc_ids:
+        for doc_id in doc_ids:
+            supabase.table("embeddings").delete().eq("document_id", doc_id).execute()
+
+    # 2. Documents
+    supabase.table("documents").delete().eq("user_id", user_id).execute()
+
+    # 3. Chat history
+    supabase.table("chat_history").delete().eq("user_id", user_id).execute()
+
+    # 4. Conversations
+    supabase.table("conversations").delete().eq("user_id", user_id).execute()
+
+    # 5. Audit logs
+    supabase.table("audit_logs").delete().eq("user_id", user_id).execute()
+
+    # 6. Profile
+    supabase.table("profiles").delete().eq("id", user_id).execute()
+
+    # 7. Auth user (requiere service key con permisos de admin)
+    try:
+        supabase.auth.admin.delete_user(user_id)
+    except Exception as e:
+        logger.warning(f"No se pudo eliminar auth user {user_id}: {e}")
+
+    return {"message": f"Usuario {user_id} y todos sus datos eliminados."}    

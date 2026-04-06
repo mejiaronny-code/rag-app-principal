@@ -1,12 +1,29 @@
-from groq import Groq
-import os
-from dotenv import load_dotenv
+import httpx
 
-load_dotenv()
-client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+# REEMPLAZA ESTOS 3 DATOS MANUALMENTE AQUÍ MISMO:
+API_KEY = "" 
+SENDER_EMAIL = "mejiaalejandro403@gmail.com"
+TEST_RECEIVER = "mejiaalejandro403+test@gmail.com"
 
-models = client.models.list()
+url = "https://api.brevo.com/v3/smtp/email"
 
-print("=== MODELOS DISPONIBLES EN GROQ ===")
-for model in models.data:
-    print(model.id)
+headers = {
+    "api-key": API_KEY.strip(),
+    "content-type": "application/json",
+    "accept": "application/json"
+}
+
+payload = {
+    "sender": {"name": "Test Papyrus", "email": SENDER_EMAIL},
+    "to": [{"email": TEST_RECEIVER}],
+    "subject": "Prueba de Choque",
+    "htmlContent": "<html><body><h1>Si lees esto, el código no era el problema</h1></body></html>"
+}
+
+with httpx.Client() as client:
+    print("--- ENVIANDO PETICIÓN ---")
+    response = client.post(url, json=payload, headers=headers)
+    
+    print(f"STATUS CODE: {response.status_code}")
+    print("--- RESPUESTA DETALLADA DE BREVO ---")
+    print(response.text) # ESTO ES LO QUE NECESITAMOS VER

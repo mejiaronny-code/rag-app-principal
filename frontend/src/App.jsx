@@ -1,26 +1,26 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
-import { useSession } from './hooks/useSession'
-import { useDocuments } from './hooks/useDocuments'
-import { useChat } from './hooks/useChat'
+import { useSession }           from './hooks/useSession'
+import { useDocuments }         from './hooks/useDocuments'
+import { useChat }              from './hooks/useChat'
 import { useDocumentSelection } from './hooks/useDocumentSelection'
-import { Sidebar } from './components/Sidebar'
-import { ChatMessage } from './components/ChatMessage'
-import { ChatInput } from './components/ChatInput'
-import { TypingIndicator } from './components/TypingIndicator'
-import { EmptyState } from './components/EmptyState'
-import { LoadingScreen } from './components/LoadingScreen'
-import { useTheme } from './hooks/useTheme'
-import { useAuth } from './context/AuthContext'
-import { LoginPage } from './pages/LoginPage'
+import { Sidebar }              from './components/Sidebar'
+import { VirtualChatList }      from './components/VirtualChatList'   // ← NUEVO
+import { ChatInput }            from './components/ChatInput'
+import { EmptyState }           from './components/EmptyState'
+import { LoadingScreen }        from './components/LoadingScreen'
+import { useTheme }             from './hooks/useTheme'
+import { useAuth }              from './context/AuthContext'
+import { LoginPage }            from './pages/LoginPage'
 import { LogOut, Menu, Shield } from 'lucide-react'
-import { useConversations } from './hooks/useConversations'
-import { AdminPage } from './pages/AdminPage'
-import { useInactivityLogout } from './hooks/useInactivityLogout'  // ← NUEVO
+import { useConversations }     from './hooks/useConversations'
+import { AdminPage }            from './pages/AdminPage'
+import { useInactivityLogout }  from './hooks/useInactivityLogout'
+import { ResetPasswordPage } from './pages/ResetPasswordPage'
 
 export default function App() {
   const {
-    user, loading: authLoading, signOut, fullName,
-    transitioning, transitionMsg, withTransition,
+    user, profile, loading: authLoading, profileLoading,
+    signOut, fullName, transitioning, transitionMsg, withTransition,
   } = useAuth()
   const { theme, toggleTheme }  = useTheme()
   const { sessionId, createNewSession } = useSession(user?.id)
@@ -36,25 +36,24 @@ export default function App() {
   } = useDocuments(sessionId)
   const {
     messages, loading: chatLoading, error: chatError,
-    sendMessage, clearMessages, clearError,
+    sendMessage, clearMessages,
   } = useChat(sessionId, activeConversationId, loadConversationMessages)
   const { selectedIds, allSelected, activeIds, toggle, selectAll } = useDocumentSelection(documents)
-  const messagesEndRef = useRef(null)
-  const [sidebarOpen, setSidebarOpen]     = useState(false)
-  const [showAdmin, setShowAdmin]         = useState(false)
-  const [sessionExpired, setSessionExpired] = useState(false)  // ← NUEVO
+
+  const [sidebarOpen, setSidebarOpen]       = useState(false)
+  const [showAdmin, setShowAdmin]           = useState(false)
+  const [sessionExpired, setSessionExpired] = useState(false)
+  const [isAdmin, setIsAdmin]               = useState(false)
+  // ← NUEVO: detectar si Supabase redirigió con un token de recuperación
+  const [isRecovery, setIsRecovery] = useState(
+    () => window.location.hash.includes('type=recovery')
+  )
   const { getToken } = useAuth()
-  const [isAdmin, setIsAdmin] = useState(false)
 
   // ── Timeout por inactividad ───────────────────────────────────────────────
-  // ← NUEVO: se activa solo cuando hay usuario autenticado
-  const handleInactivityTimeout = useCallback(() => {
-    setSessionExpired(true)
-  }, [])
-
+  const handleInactivityTimeout = useCallback(() => setSessionExpired(true), [])
   useInactivityLogout(handleInactivityTimeout, !!user)
 
-  // ── Handler para cerrar sesión desde el overlay de expiración ─────────────
   const handleExpiredSignOut = useCallback(async () => {
     setSessionExpired(false)
     await signOut()
@@ -64,71 +63,56 @@ export default function App() {
     if (!user) return
     getToken().then(token => {
       fetch(`${import.meta.env.VITE_API_URL}/admin/stats`, {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` },
       }).then(res => setIsAdmin(res.ok))
     })
   }, [user])
 
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages, chatLoading])
-
-  // ── Overlay de sesión expirada ────────────────────────────────────────────
-  // ← NUEVO: se muestra encima de todo cuando hay inactividad
+  // ── Pantallas especiales (orden importa) ─────────────────────────────────
+  // Mostrar página de reset si viene del link del email
+  if (isRecovery) {
+    return (
+      <ResetPasswordPage
+        onDone={() => {
+          setIsRecovery(false)
+          // Limpiar el hash de la URL sin recargar la página
+          window.history.replaceState(null, '', window.location.pathname)
+        }}
+      />
+    )
+  }
   if (sessionExpired) {
     return (
-      <div
-        style={{
-          position: 'fixed', inset: 0, zIndex: 9999,
-          backgroundColor: 'var(--bg-primary)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          padding: '1.5rem',
-        }}
-      >
-        <div
-          style={{
-            backgroundColor: 'var(--bg-card)',
-            border: '1px solid var(--border)',
-            borderRadius: '1rem',
-            padding: '2.5rem 2rem',
-            maxWidth: '400px',
-            width: '100%',
-            textAlign: 'center',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '1.25rem',
-          }}
-        >
-          {/* Icono */}
+      <div style={{
+        position: 'fixed', inset: 0, zIndex: 9999,
+        backgroundColor: 'var(--bg-primary)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        padding: '1.5rem',
+      }}>
+        <div style={{
+          backgroundColor: 'var(--bg-card)',
+          border: '1px solid var(--border)',
+          borderRadius: '1rem',
+          padding: '2.5rem 2rem',
+          maxWidth: '400px', width: '100%',
+          textAlign: 'center',
+          display: 'flex', flexDirection: 'column', gap: '1.25rem',
+        }}>
           <div style={{ fontSize: '2.5rem' }}>🔒</div>
-
-          {/* Título */}
           <h2 style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '1.2rem', margin: 0 }}>
             Sesión expirada
           </h2>
-
-          {/* Mensaje */}
           <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', lineHeight: 1.6, margin: 0 }}>
             Tu sesión cerró automáticamente por 2 horas de inactividad.
-            Vuelve a iniciar sesión para continuar.
           </p>
-
-          {/* Botón */}
           <button
             onClick={handleExpiredSignOut}
             style={{
-              backgroundColor: 'var(--accent-green)',
-              color: '#fff',
-              border: 'none',
-              borderRadius: '0.6rem',
-              padding: '0.75rem 1.5rem',
-              fontWeight: 600,
-              fontSize: '0.9rem',
-              cursor: 'pointer',
-              transition: 'opacity 0.2s',
+              backgroundColor: 'var(--accent-green)', color: '#fff',
+              border: 'none', borderRadius: '0.6rem',
+              padding: '0.75rem 1.5rem', fontWeight: 600,
+              fontSize: '0.9rem', cursor: 'pointer',
             }}
-            onMouseEnter={e => e.target.style.opacity = '0.85'}
-            onMouseLeave={e => e.target.style.opacity = '1'}
           >
             Volver al inicio de sesión
           </button>
@@ -137,11 +121,61 @@ export default function App() {
     )
   }
 
-  // ── Pantalla de carga global ──────────────────────────────────────────────
-  if (transitioning) return <LoadingScreen message={transitionMsg} />
-  if (showAdmin)     return <AdminPage onBack={() => setShowAdmin(false)} />
-  if (authLoading)   return <LoadingScreen message="Cargando..." />
-  if (!user)         return <LoginPage />
+  if (transitioning)  return <LoadingScreen message={transitionMsg} />
+  if (authLoading)    return <LoadingScreen message="Cargando..." />
+  if (!user)          return <LoginPage />
+
+  // ← NUEVO: perfil cargando (evita flash de pantalla incorrecta)
+  if (profileLoading) return <LoadingScreen message="Verificando acceso..." />
+
+  // ← NUEVO: usuario autenticado pero pendiente de aprobación
+  if (profile && profile.active === false) {
+    return (
+      <div style={{
+        minHeight: '100vh', backgroundColor: 'var(--bg-primary)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        padding: '1.5rem',
+      }}>
+        <div style={{
+          backgroundColor: 'var(--bg-card)',
+          border: '1px solid var(--border)',
+          borderRadius: '1rem',
+          padding: '2.5rem 2rem',
+          maxWidth: '440px', width: '100%',
+          textAlign: 'center',
+          display: 'flex', flexDirection: 'column', gap: '1.25rem',
+        }}>
+          <div style={{ fontSize: '2.5rem' }}>⏳</div>
+          <h2 style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '1.25rem', margin: 0 }}>
+            Cuenta pendiente de aprobación
+          </h2>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', lineHeight: 1.6, margin: 0 }}>
+            Tu cuenta fue creada exitosamente. Un administrador debe aprobarla antes de que puedas acceder.
+            Recibirás un correo cuando esté lista.
+          </p>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', margin: 0 }}>
+            {user.email}
+          </p>
+          <button
+            onClick={signOut}
+            style={{
+              backgroundColor: 'transparent',
+              color: 'var(--text-secondary)',
+              border: '1px solid var(--border)',
+              borderRadius: '0.6rem',
+              padding: '0.65rem 1.5rem',
+              fontWeight: 500, fontSize: '0.875rem',
+              cursor: 'pointer',
+            }}
+          >
+            Cerrar sesión
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  if (showAdmin) return <AdminPage onBack={() => setShowAdmin(false)} />
 
   // ── Handlers ─────────────────────────────────────────────────────────────
   const handleNewSession = async () => {
@@ -172,11 +206,8 @@ export default function App() {
   }
 
   const handleDeleteDoc = async (docId) => {
-    try {
-      await removeDocument(docId)
-    } catch (e) {
-      alert('No se pudo eliminar el documento.')
-    }
+    try { await removeDocument(docId) }
+    catch { alert('No se pudo eliminar el documento.') }
   }
 
   const handleSend = async (query) => {
@@ -269,13 +300,15 @@ export default function App() {
                 </svg>
               )}
             </button>
-            <button
-              onClick={handleOpenAdmin}
-              className="p-2 rounded-lg border border-border hover:bg-bg-tertiary transition-colors"
-              title="Panel de administración"
-            >
-              <Shield className="w-4 h-4" style={{ color: 'var(--accent-green)' }} />
-            </button>
+            {isAdmin && (
+              <button
+                onClick={handleOpenAdmin}
+                className="p-2 rounded-lg border border-border hover:bg-bg-tertiary transition-colors"
+                title="Panel de administración"
+              >
+                <Shield className="w-4 h-4" style={{ color: 'var(--accent-green)' }} />
+              </button>
+            )}
             <button
               onClick={signOut}
               className="p-2 rounded-lg border border-border hover:bg-bg-tertiary transition-colors"
@@ -294,19 +327,14 @@ export default function App() {
           </div>
         )}
 
-        <div className="flex-1 overflow-y-auto px-4 md:px-6 py-6 space-y-5 min-h-0">
-          {messages.length === 0 && !chatLoading ? (
+        {/* ← NUEVO: VirtualChatList reemplaza el div manual */}
+        {messages.length === 0 && !chatLoading ? (
+          <div className="flex-1 overflow-y-auto px-4 md:px-6 py-6 min-h-0">
             <EmptyState hasDocuments={documents.length > 0} />
-          ) : (
-            <>
-              {messages.map(msg => (
-                <ChatMessage key={msg.id} message={msg} />
-              ))}
-              {chatLoading && <TypingIndicator />}
-              <div ref={messagesEndRef} />
-            </>
-          )}
-        </div>
+          </div>
+        ) : (
+          <VirtualChatList messages={messages} chatLoading={chatLoading} />
+        )}
 
         <div className="px-4 md:px-6 pb-4 md:pb-5 pt-3 border-t border-border bg-bg-secondary/50">
           <ChatInput

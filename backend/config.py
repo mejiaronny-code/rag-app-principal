@@ -27,6 +27,11 @@ class Settings(BaseSettings):
     RATE_LIMIT_UPLOAD: str = "10/minute"
     RATE_LIMIT_CHAT: str = "30/minute"
 
+    # ← NUEVO: Brevo
+    BREVO_API_KEY:        str
+    BREVO_SENDER_EMAIL:   str
+    APP_NAME:             str = "Papyrus"
+
     MAX_DOCS_PER_USER: int = int(os.getenv("MAX_DOCS_PER_USER", "20"))
 
     class Config:
