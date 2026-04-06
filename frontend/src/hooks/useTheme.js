@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 
 export function useTheme() {
   const [theme, setTheme] = useState(() => {
-    return localStorage.getItem('rag_theme') || 'dark'
+    return localStorage.getItem('rag_theme') || 'light'
   })
 
   useEffect(() => {
