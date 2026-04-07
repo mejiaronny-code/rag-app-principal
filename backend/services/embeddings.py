@@ -31,12 +31,19 @@ def _embed_cached(text: str, task_type: str) -> tuple:
 
 
 def get_embedding(text: str) -> List[float]:
-    return list(_embed_cached(text, "RETRIEVAL_DOCUMENT"))
+    clean = " ".join(text.split())[:1500]
+    if not clean:
+        raise ValueError("Texto vacío para embedding")
+    return list(_embed_cached(clean, "RETRIEVAL_DOCUMENT"))
 
 
 @traceable(name="get_query_embedding")
 def get_query_embedding(text: str) -> List[float]:
-    return list(_embed_cached(text, "RETRIEVAL_QUERY"))
+    # Sanitizar: limpiar saltos de línea extras y truncar si es muy largo
+    clean = " ".join(text.split())[:1500]
+    if not clean:
+        raise ValueError("Texto vacío para embedding")
+    return list(_embed_cached(clean, "RETRIEVAL_QUERY"))
 
 
 def get_embeddings_batch(texts: List[str]) -> List[List[float]]:
