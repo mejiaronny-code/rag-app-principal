@@ -64,7 +64,7 @@ export function useDocuments(sessionId) {
   const clearDocuments = useCallback(() => {
     setDocuments([])
   }, [])
-  const clearError = useCallback((msg = null) => setError(null), [])
+  const clearError = useCallback((msg = null) => setError(msg), [])
 
   return {
     documents,
