@@ -4,7 +4,7 @@ from config import get_settings
 from typing import List
 from langsmith import traceable
 
-EMBEDDING_MODEL = "gemini-embedding-001"
+EMBEDDING_MODEL = "gemini-embedding-004"
 EMBEDDING_DIMS  = 3072
 BASE_URL        = "https://generativelanguage.googleapis.com/v1beta/models"
 
