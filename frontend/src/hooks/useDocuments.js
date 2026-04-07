@@ -8,6 +8,7 @@ export function useDocuments(sessionId) {
   const [uploading, setUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
   const [error, setError] = useState(null)
+  const clearError = useCallback((msg = null) => setError(msg), [])
 
   const fetchDocuments = useCallback(async () => {
     if (!sessionId) return
