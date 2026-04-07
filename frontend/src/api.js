@@ -102,8 +102,6 @@ export async function deleteSession(sessionId) {
   return response.data
 }
 
-export default api
-
 // ── Conversations ──────────────────────────────────────────────────────────
 
 export async function getConversations() {
@@ -133,3 +131,5 @@ export async function getConversationMessages(conversationId) {
   const response = await api.get(`/conversations/${conversationId}/messages`)
   return response.data
 }
+
+export default api
