@@ -8,7 +8,6 @@ export function useDocuments(sessionId) {
   const [uploading, setUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
   const [error, setError] = useState(null)
-  const clearError = useCallback((msg = null) => setError(msg), [])
 
   const fetchDocuments = useCallback(async () => {
     if (!sessionId) return
@@ -65,7 +64,7 @@ export function useDocuments(sessionId) {
   const clearDocuments = useCallback(() => {
     setDocuments([])
   }, [])
-  const clearError = useCallback(() => setError(null), [])
+  const clearError = useCallback((msg = null) => setError(null), [])
 
   return {
     documents,
