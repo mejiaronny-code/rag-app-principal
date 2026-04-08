@@ -3,6 +3,8 @@ from functools import lru_cache
 from config import get_settings
 from typing import List
 from langsmith import traceable
+import logging
+logger = logging.getLogger(__name__)
 
 EMBEDDING_MODEL = "gemini-embedding-001"
 EMBEDDING_DIMS  = 3072
