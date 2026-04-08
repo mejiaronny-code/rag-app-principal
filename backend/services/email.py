@@ -60,7 +60,7 @@ def send_approval_email(to_email: str, first_name: str) -> bool:
               <table cellpadding="0" cellspacing="0" style="margin:28px 0;">
                 <tr>
                   <td style="background:linear-gradient(135deg,#16a34a,#22c97a);border-radius:10px;padding:14px 32px;text-align:center;">
-                    <a href="{settings.FRONTEND_ORIGIN}/login"
+                    <a href="{settings.FRONTEND_ORIGIN}"
                        style="color:#fff;text-decoration:none;font-weight:600;font-size:15px;">
                       Iniciar sesión →
                     </a>
