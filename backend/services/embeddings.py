@@ -18,6 +18,8 @@ def _embed(text: str, task_type: str) -> List[float]:
         "taskType": task_type,
     }
     response = httpx.post(url, json=payload, timeout=30.0)
+    if response.status_code != 200:
+        logger.error(f"Gemini error body: {response.text}")
     response.raise_for_status()
     return response.json()["embedding"]["values"]
 
