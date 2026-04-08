@@ -55,50 +55,73 @@ def deduplicate_chunks(chunks_lists: List[List[Dict[str, Any]]]) -> List[Dict[st
 
 @traceable(name="retrieve_context")
 def retrieve_context(query: str, session_id: str, document_ids: Optional[List[str]] = None) -> List[Dict[str, Any]]:
-    """
-    Multi-Query Retrieval:
-    1. Genera 3 variantes del query
-    2. Hace retrieval de cada una
-    3. Deduplica y ordena por relevancia
-    """
-    # Generar variantes del query
     variants = generate_query_variants(query)
-    all_queries = [query] + variants  # Query original + 3 variantes
-    
-    all_results = []
-    for q in all_queries:
-        try:
-            embedding = get_query_embedding(q)
-            results = search_similar_chunks(
-                query_embedding=embedding,
-                session_id=session_id,
-                document_ids=document_ids,
-            )
-            all_results.append(results)
-            logger.info(f"Query '{q[:50]}...' → {len(results)} resultados")
-        except Exception as e:
-            logger.warning(f"Error en retrieval para variante '{q}': {e}")
-            all_results.append([])
-    
-    # Deduplicar y retornar top chunks
+    all_queries = [query] + variants
+
+    # Si hay documentos específicos, hacer retrieval por cada uno
+    if document_ids and len(document_ids) > 0:
+        all_results = []
+        chunks_per_doc = max(3, 10 // len(document_ids))  # distribuir equitativamente
+        
+        for doc_id in document_ids:
+            for q in all_queries[:2]:  # solo query original + 1 variante por doc
+                try:
+                    embedding = get_query_embedding(q)
+                    results = search_similar_chunks(
+                        query_embedding=embedding,
+                        session_id=session_id,
+                        document_ids=[doc_id],  # ← un doc a la vez
+                        match_count=chunks_per_doc,
+                        match_threshold=0.1,  # ← más bajo para no perder docs con menor similitud
+                    )
+                    all_results.append(results)
+                    for r in results:
+                        logger.info(f"  doc={doc_id[:8]} chunk='{r.get('document_name')}' sim={r.get('similarity', 0):.3f}")
+                except Exception as e:
+                    logger.warning(f"Error en retrieval para doc {doc_id}: {e}")
+                    all_results.append([])
+    else:
+        # Sin selección específica — comportamiento original
+        all_results = []
+        for q in all_queries:
+            try:
+                embedding = get_query_embedding(q)
+                results = search_similar_chunks(
+                    query_embedding=embedding,
+                    session_id=session_id,
+                    document_ids=None,
+                )
+                all_results.append(results)
+            except Exception as e:
+                logger.warning(f"Error en retrieval para variante '{q}': {e}")
+                all_results.append([])
+
     final_chunks = deduplicate_chunks(all_results)
     logger.info(f"Total chunks únicos recuperados: {len(final_chunks)}")
-    
     return final_chunks
 
 
 def format_context_for_prompt(chunks: List[Dict[str, Any]]) -> str:
-    """Formatea los chunks recuperados para incluirlos en el prompt."""
     if not chunks:
         return "No se encontró contexto relevante en los documentos."
-    
-    context_parts = []
-    for i, chunk in enumerate(chunks, 1):
+
+    # Agrupar chunks por documento
+    docs: Dict[str, list] = {}
+    for chunk in chunks:
         doc_name = chunk.get("document_name", "Documento desconocido")
-        content = chunk.get("content", "")
-        similarity = chunk.get("similarity", 0)
-        context_parts.append(
-            f"[Fuente {i} - {doc_name} (relevancia: {similarity:.2%})]\n{content}"
+        if doc_name not in docs:
+            docs[doc_name] = []
+        docs[doc_name].append(chunk)
+
+    context_parts = []
+    for doc_name, doc_chunks in docs.items():
+        # Combinar el contenido de todos los chunks del mismo documento
+        combined = "\n\n".join(
+            c.get("content", "") for c in doc_chunks
         )
-    
+        best_similarity = max(c.get("similarity", 0) for c in doc_chunks)
+        context_parts.append(
+            f"[Documento: {doc_name} (relevancia: {best_similarity:.2%})]\n{combined}"
+        )
+
     return "\n\n---\n\n".join(context_parts)
