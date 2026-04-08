@@ -7,7 +7,7 @@ from langsmith import traceable
 
 logger = logging.getLogger(__name__)
 
-MATCH_THRESHOLD = 0.5
+MATCH_THRESHOLD = 0.3
 MATCH_COUNT = 5  # por variante del query
 
 @traceable(name="search_similar_chunks")
@@ -28,7 +28,7 @@ def search_similar_chunks(
             "match_session_id": session_id,
             "match_threshold": match_threshold,
             "match_count": match_count,
-            "filter_document_ids": document_ids or [],
+            "filter_document_ids": document_ids if document_ids else None,
         },
     ).execute()
     

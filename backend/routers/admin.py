@@ -237,7 +237,7 @@ async def admin_chat_user(
         context_lines.append(f"[{doc_name}]\n{content}")
     context_str = "\n\n---\n\n".join(context_lines)
 
-    prompt = f"""Eres un asistente de análisis para administradores. Responde en español basándote EXCLUSIVAMENTE en el contexto proporcionado. No inventes datos.
+    prompt = f"""Eres un asistente de análisis para administradores. Responde en español basándote EXCLUSIVAMENTE en el contexto proporcionado. No inventes datos. Cuando el usuario pida resumen de CADA documento, identifica cada fuente del contexto y resume cada una por separado con su nombre como título y su respectivo usuario.
 
 CONTEXTO:
 {context_str}

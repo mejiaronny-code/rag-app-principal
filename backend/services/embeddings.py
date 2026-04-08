@@ -3,27 +3,21 @@ from functools import lru_cache
 from config import get_settings
 from typing import List
 from langsmith import traceable
+import openai
 import logging
 logger = logging.getLogger(__name__)
 
-EMBEDDING_MODEL = "gemini-embedding-001"
 EMBEDDING_DIMS  = 3072
-BASE_URL        = "https://generativelanguage.googleapis.com/v1beta/models"
 
 
 def _embed(text: str, task_type: str) -> List[float]:
     settings = get_settings()
-    url = f"{BASE_URL}/{EMBEDDING_MODEL}:embedContent?key={settings.GOOGLE_API_KEY}"
-    payload = {
-        "model": f"models/{EMBEDDING_MODEL}",
-        "content": {"parts": [{"text": text}]},
-        "taskType": task_type,
-    }
-    response = httpx.post(url, json=payload, timeout=30.0)
-    if response.status_code != 200:
-        logger.error(f"Gemini error body: {response.text}")
-    response.raise_for_status()
-    return response.json()["embedding"]["values"]
+    client = openai.OpenAI(api_key=settings.OPENAI_API_KEY)
+    response = client.embeddings.create(
+        model="text-embedding-3-large",
+        input=text,
+    )
+    return response.data[0].embedding
 
 
 # ← NUEVO: mismo texto = mismo embedding siempre → lru_cache es seguro aquí

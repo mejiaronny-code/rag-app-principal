@@ -66,6 +66,8 @@ REGLAS IMPORTANTES:
 4. Cita las fuentes relevantes de forma natural en tu respuesta.
 5. Sé conciso pero completo. Usa markdown cuando sea apropiado.
 6. Si el contexto es insuficiente, sugiere qué tipo de documento podría responder mejor la pregunta.
+7. Cuando el usuario pida resumen de CADA documento, identifica cada fuente del contexto y resume cada una por separado con su nombre como título.
+8. Para tablas y datos numéricos, usa SIEMPRE formato markdown de tabla.
 
 CONTEXTO DE LOS DOCUMENTOS:
 {context}

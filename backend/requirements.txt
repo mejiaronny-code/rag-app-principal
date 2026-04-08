@@ -21,3 +21,4 @@ openpyxl==3.1.2
 langsmith==0.1.147
 groq==1.1.1
 requests==2.32.3
+openai>=1.0.0
