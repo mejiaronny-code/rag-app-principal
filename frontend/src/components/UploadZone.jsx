@@ -78,7 +78,7 @@ export function UploadZone({ onFileUpload, onUrlUpload, uploading, uploadProgres
           />
         </div>
         {uploadProgress === 0 && (
-          <p className="text-xs text-text-muted mt-2">Generando embeddings con Gemini...</p>
+          <p className="text-xs text-text-muted mt-2">Guardando tu documento...</p>
         )}
       </div>
     )
