@@ -4,9 +4,8 @@ import { Upload, Link, X, Loader2, AlertCircle } from 'lucide-react'
 const ACCEPTED_TYPES = '.pdf,.docx,.doc,.txt,.md,.jpg,.jpeg,.png,.gif,.webp,.xlsx,.xls'
 const MAX_MB = 20
 
-// Mapa de errores HTTP → mensajes amigables
 const UPLOAD_ERROR_MESSAGES = {
-  429: null, // usa el mensaje del backend (tiene el límite exacto)
+  429: null,
   413: `El archivo es demasiado grande. Máximo ${MAX_MB}MB.`,
   415: 'Tipo de archivo no soportado. Sube PDF, DOCX, TXT, imágenes o URLs.',
   422: 'No se pudo procesar el documento. Verifica que no esté corrupto.',
@@ -40,7 +39,6 @@ export function UploadZone({ onFileUpload, onUrlUpload, uploading, uploadProgres
   }
 
   const handleFile = (file) => {
-    // Validación local antes de llamar al backend
     if (file.size > MAX_MB * 1024 * 1024) {
       onClearError?.(`El archivo supera el límite de ${MAX_MB}MB.`)
       return
@@ -123,7 +121,6 @@ export function UploadZone({ onFileUpload, onUrlUpload, uploading, uploadProgres
   return (
     <div className="px-3 mb-3 flex flex-col gap-2">
 
-      {/* ← NUEVO: Banner de error de upload */}
       {uploadError && (
         <div className="flex items-start gap-2 p-3 rounded-lg border border-red-200 bg-red-50 dark:bg-red-950/30 dark:border-red-800">
           <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
@@ -149,14 +146,21 @@ export function UploadZone({ onFileUpload, onUrlUpload, uploading, uploadProgres
         onDragOver={e => { e.preventDefault(); setDragOver(true) }}
         onDragLeave={() => setDragOver(false)}
         onDrop={handleDrop}
-        onClick={(e) => { e.stopPropagation(); inputRef.current?.click() }}
       >
         <input
           ref={inputRef}
           type="file"
           accept={ACCEPTED_TYPES}
           tabIndex={-1}
-          className="hidden"
+          style={{
+            position: 'absolute',
+            opacity: 0,
+            width: '100%',
+            height: '100%',
+            top: 0,
+            left: 0,
+            cursor: 'pointer',
+          }}
           onChange={e => e.target.files?.[0] && handleFile(e.target.files[0])}
         />
         <Upload className="w-5 h-5 mx-auto mb-1.5 text-text-muted" />
