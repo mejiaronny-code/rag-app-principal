@@ -4,22 +4,23 @@ import { ChatMessage } from './ChatMessage'
 import { TypingIndicator } from './TypingIndicator'
 
 export function VirtualChatList({ messages, chatLoading }) {
-  const parentRef  = useRef(null)
-  const totalCount = messages.length + (chatLoading ? 1 : 0)
+  const parentRef    = useRef(null)
+  const prevCountRef = useRef(0)
+  const totalCount   = messages.length + (chatLoading ? 1 : 0)
 
   const virtualizer = useVirtualizer({
-    count:           totalCount,
+    count:            totalCount,
     getScrollElement: () => parentRef.current,
-    estimateSize:    () => 120,       // altura estimada por mensaje
-    measureElement:  el => el?.getBoundingClientRect().height ?? 120,
-    overscan:        5,
+    estimateSize:     () => 120,
+    overscan:         3,
   })
 
-  // Scroll al último mensaje cuando llegan nuevos
+  // Scroll al último mensaje solo cuando llegan mensajes nuevos
   useEffect(() => {
-    if (totalCount > 0) {
+    if (totalCount > prevCountRef.current) {
       virtualizer.scrollToIndex(totalCount - 1, { behavior: 'smooth' })
     }
+    prevCountRef.current = totalCount
   }, [totalCount])
 
   return (
@@ -40,13 +41,12 @@ export function VirtualChatList({ messages, chatLoading }) {
             <div
               key={vItem.key}
               data-index={vItem.index}
-              ref={virtualizer.measureElement}
               style={{
-                position:  'absolute',
-                top:       0,
-                left:      0,
-                width:     '100%',
-                transform: `translateY(${vItem.start}px)`,
+                position:      'absolute',
+                top:           0,
+                left:          0,
+                width:         '100%',
+                transform:     `translateY(${vItem.start}px)`,
                 paddingBottom: '1.25rem',
               }}
             >

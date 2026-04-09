@@ -218,42 +218,36 @@ def _save_and_embed(
                 pass
         raise HTTPException(status_code=500, detail=f"Error guardando el documento: {e}")
 
-    # ── 3. Generar embeddings con retry por chunk ──────────────────────────
+    # ── 3. Generar embeddings en batch ────────────────────────────────────────
     logger.info(f"Generando embeddings para {len(chunks)} chunks de '{name}'...")
 
-    embedding_rows = []
-    failed_chunks  = []
-
-    for i, chunk in enumerate(chunks):
-        emb = _embed_with_retry(chunk, max_retries=3, wait_seconds=2.0)
-        if emb is None:
-            failed_chunks.append(i)
-        else:
-            embedding_rows.append({
-                "document_id": str(doc_id),
-                "session_id":  session_id,
-                "user_id":     user_id,
-                "content":     chunk,
-                "embedding":   emb,
-                "chunk_index": i,
-            })
-
-    # Si más de la mitad de los chunks fallaron, abortar con cleanup total
-    if len(failed_chunks) > len(chunks) / 2:
-        logger.error(
-            f"Demasiados chunks fallidos ({len(failed_chunks)}/{len(chunks)}) "
-            f"para '{name}'. Haciendo cleanup."
-        )
+    try:
+        embeddings = get_embeddings_batch(chunks)
+    except Exception as e:
+        logger.error(f"Error generando embeddings en batch para '{name}': {e}")
         _cleanup_document(supabase, doc_id, storage_path)
         raise HTTPException(
             status_code=500,
-            detail="Error generando embeddings. El documento no fue indexado. Intenta de nuevo."
+            detail="Error generando embeddings. El documento no fue indexado."
         )
 
-    if failed_chunks:
-        logger.warning(
-            f"'{name}': {len(failed_chunks)} chunks no pudieron indexarse "
-            f"(índices: {failed_chunks}). El documento se guardó parcialmente."
+    embedding_rows = [
+        {
+            "document_id": str(doc_id),
+            "session_id":  session_id,
+            "user_id":     user_id,
+            "content":     chunk,
+            "embedding":   emb,
+            "chunk_index": i,
+        }
+        for i, (chunk, emb) in enumerate(zip(chunks, embeddings))
+    ]
+
+    if not embedding_rows:
+        _cleanup_document(supabase, doc_id, storage_path)
+        raise HTTPException(
+            status_code=500,
+            detail="No se pudo generar ningún embedding."
         )
 
     # ── 4. Insertar embeddings en lotes ────────────────────────────────────
