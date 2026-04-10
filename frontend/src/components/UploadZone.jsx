@@ -152,6 +152,7 @@ export function UploadZone({ onFileUpload, onUrlUpload, uploading, uploadProgres
           type="file"
           accept={ACCEPTED_TYPES}
           tabIndex={-1}
+          onClick={(e) => e.stopPropagation()}
           style={{
             position: 'absolute',
             opacity: 0,
@@ -161,7 +162,13 @@ export function UploadZone({ onFileUpload, onUrlUpload, uploading, uploadProgres
             left: 0,
             cursor: 'pointer',
           }}
-          onChange={e => e.target.files?.[0] && handleFile(e.target.files[0])}
+          onChange={e => {
+            const file = e.target.files?.[0]
+            if (file) {
+              handleFile(file)
+              e.target.value = ''
+            }
+          }}
         />
         <Upload className="w-5 h-5 mx-auto mb-1.5 text-text-muted" />
         <p className="text-xs text-text-secondary font-medium">

@@ -199,7 +199,6 @@ export default function App() {
 
   const handleFileUpload = async (file) => {
     try { await uploadFileDoc(file) } catch (e) {}
-    console.error('Upload error:', e)
   }
 
   const handleUrlUpload = async (url) => {
