@@ -35,11 +35,25 @@ export function useChat(sessionId, conversationId, loadConversationMessages) {
       setMessages([])
       return
     }
-
-    // ← NUEVO: cancelar si la conversación cambió antes de que resuelva
+  
     let cancelled = false
     loadConversationMessages(conversationId).then(msgs => {
-      if (!cancelled) setMessages(msgs ?? [])
+      if (!cancelled) {
+        // Deduplicar por contenido+rol para evitar duplicados con mensajes locales
+        setMessages(prev => {
+          const dbMsgs = msgs ?? []
+          if (prev.length === 0) return dbMsgs
+          // Si la DB tiene más mensajes que el estado local, usar DB
+          // Si el estado local tiene mensajes optimistas no guardados aún, mantenerlos
+          const dbIds = new Set(dbMsgs.map(m => `${m.role}:${m.content}`))
+          const localOnly = prev.filter(m => 
+            m.id?.startsWith('user-') || m.id?.startsWith('assistant-')
+              ? !dbIds.has(`${m.role}:${m.content}`)
+              : false
+          )
+          return [...dbMsgs, ...localOnly]
+        })
+      }
     })
     return () => { cancelled = true }
   }, [conversationId])

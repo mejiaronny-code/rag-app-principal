@@ -102,6 +102,8 @@ async def upload_document(
         from langchain.text_splitter import RecursiveCharacterTextSplitter
         splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
         chunks = splitter.split_text(text)
+        if len(chunks) > MAX_CHUNKS:
+            chunks = chunks[:MAX_CHUNKS]
 
         doc_id = await asyncio.to_thread(
             partial(
@@ -149,6 +151,11 @@ async def upload_document(
     except Exception as e:
         logger.exception(f"Error procesando documento {filename}")
         raise HTTPException(status_code=500, detail=f"Error procesando el documento: {e}")
+
+    MAX_CHUNKS = 300
+    if len(chunks) > MAX_CHUNKS:
+        logger.warning(f"'{filename}' tiene {len(chunks)} chunks, limitando a {MAX_CHUNKS}")
+        chunks = chunks[:MAX_CHUNKS]    
 
     doc_id = await asyncio.to_thread(
         partial(
