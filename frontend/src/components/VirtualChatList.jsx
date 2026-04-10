@@ -11,14 +11,16 @@ export function VirtualChatList({ messages, chatLoading }) {
   const virtualizer = useVirtualizer({
     count:            totalCount,
     getScrollElement: () => parentRef.current,
-    estimateSize:     () => 120,
+    estimateSize:     () => 150,
     overscan:         3,
+    measureElement:   (el) => el?.offsetHeight ?? 150,
   })
 
-  // Scroll al último mensaje solo cuando llegan mensajes nuevos
   useEffect(() => {
     if (totalCount > prevCountRef.current) {
-      virtualizer.scrollToIndex(totalCount - 1, { behavior: 'smooth' })
+      requestAnimationFrame(() => {
+        virtualizer.scrollToIndex(totalCount - 1, { behavior: 'smooth' })
+      })
     }
     prevCountRef.current = totalCount
   }, [totalCount])
@@ -41,6 +43,7 @@ export function VirtualChatList({ messages, chatLoading }) {
             <div
               key={vItem.key}
               data-index={vItem.index}
+              ref={virtualizer.measureElement}
               style={{
                 position:      'absolute',
                 top:           0,
