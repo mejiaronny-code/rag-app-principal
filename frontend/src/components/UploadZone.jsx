@@ -155,12 +155,13 @@ export function UploadZone({ onFileUpload, onUrlUpload, uploading, uploadProgres
           onClick={(e) => e.stopPropagation()}
           style={{
             position: 'absolute',
-            opacity: 0,
+            opacity: 0.01,
             width: '100%',
             height: '100%',
             top: 0,
             left: 0,
             cursor: 'pointer',
+            zIndex: 1,
           }}
           onChange={e => {
             const file = e.target.files?.[0]

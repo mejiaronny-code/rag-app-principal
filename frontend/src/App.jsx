@@ -126,7 +126,7 @@ export default function App() {
   if (!user)          return <LoginPage />
 
   // ← NUEVO: perfil cargando (evita flash de pantalla incorrecta)
-  if (profileLoading) return <LoadingScreen message="Verificando acceso..." />
+  if (profileLoading && !profile) return <LoadingScreen message="Verificando acceso..." />
 
   // ← NUEVO: usuario autenticado pero pendiente de aprobación
   if (profile && profile.active === false) {
