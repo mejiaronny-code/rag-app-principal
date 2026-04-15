@@ -152,7 +152,7 @@ async def upload_document(
         logger.exception(f"Error procesando documento {filename}")
         raise HTTPException(status_code=500, detail=f"Error procesando el documento: {e}")
 
-    MAX_CHUNKS = 300
+    MAX_CHUNKS = 2500
     if len(chunks) > MAX_CHUNKS:
         logger.warning(f"'{filename}' tiene {len(chunks)} chunks, limitando a {MAX_CHUNKS}")
         chunks = chunks[:MAX_CHUNKS]    
