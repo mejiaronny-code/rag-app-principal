@@ -225,61 +225,47 @@ def _save_and_embed(
                 pass
         raise HTTPException(status_code=500, detail=f"Error guardando el documento: {e}")
 
-    # ── 3. Generar embeddings en batch ────────────────────────────────────────
-    logger.info(f"Generando embeddings para {len(chunks)} chunks de '{name}'...")
+    # ── 3 y 4. Generar e Insertar por lotes (Batching real) ─────────────────
+    logger.info(f"Procesando {len(chunks)} chunks para '{name}' en lotes...")
+    
+    total_indexed = 0
+    batch_size = 40  # Lote pequeño para no saturar RAM ni API
 
     try:
-        embeddings = get_embeddings_batch(chunks)
+        for i in range(0, len(chunks), batch_size):
+            batch_chunks = chunks[i : i + batch_size]
+            
+            # 1. Generar embeddings solo para este lote
+            batch_embeddings = get_embeddings_batch(batch_chunks)
+            
+            # 2. Preparar filas solo para este lote
+            batch_rows = [
+                {
+                    "document_id": str(doc_id),
+                    "session_id":  session_id,
+                    "user_id":     user_id,
+                    "content":     chunk,
+                    "embedding":   emb,
+                    "chunk_index": i + j,
+                }
+                for j, (chunk, emb) in enumerate(zip(batch_chunks, batch_embeddings))
+            ]
+            
+            # 3. Insertar este lote de inmediato
+            if batch_rows:
+                supabase.table("embeddings").insert(batch_rows).execute()
+                total_indexed += len(batch_rows)
+                
     except Exception as e:
-        logger.error(f"Error generando embeddings en batch para '{name}': {e}")
+        logger.error(f"Error procesando lote en '{name}': {e}")
         _cleanup_document(supabase, doc_id, storage_path)
-        raise HTTPException(
-            status_code=500,
-            detail="Error generando embeddings. El documento no fue indexado."
-        )
+        raise HTTPException(status_code=500, detail="Error en el procesamiento por lotes.")
 
-    embedding_rows = [
-        {
-            "document_id": str(doc_id),
-            "session_id":  session_id,
-            "user_id":     user_id,
-            "content":     chunk,
-            "embedding":   emb,
-            "chunk_index": i,
-        }
-        for i, (chunk, emb) in enumerate(zip(chunks, embeddings))
-    ]
-
-    if not embedding_rows:
+    if total_indexed == 0:
         _cleanup_document(supabase, doc_id, storage_path)
-        raise HTTPException(
-            status_code=500,
-            detail="No se pudo generar ningún embedding."
-        )
+        raise HTTPException(status_code=500, detail="No se indexó contenido.")
 
-    # ── 4. Insertar embeddings en lotes ────────────────────────────────────
-    if not embedding_rows:
-        _cleanup_document(supabase, doc_id, storage_path)
-        raise HTTPException(
-            status_code=500,
-            detail="No se pudo generar ningún embedding. El documento no fue indexado."
-        )
-
-    try:
-        batch_size = 50
-        for i in range(0, len(embedding_rows), batch_size):
-            supabase.table("embeddings").insert(
-                embedding_rows[i:i + batch_size]
-            ).execute()
-    except Exception as e:
-        logger.error(f"Error insertando embeddings para '{name}': {e}. Haciendo cleanup.")
-        _cleanup_document(supabase, doc_id, storage_path)
-        raise HTTPException(
-            status_code=500,
-            detail="Error guardando los embeddings. El documento no fue indexado."
-        )
-
-    logger.info(f"Documento '{name}' indexado con {len(embedding_rows)} chunks.")
+    logger.info(f"Documento '{name}' indexado con {total_indexed} chunks.")
     return doc_id
 
 
