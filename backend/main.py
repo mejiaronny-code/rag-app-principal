@@ -23,10 +23,14 @@ os.environ["LANGCHAIN_ENDPOINT"] = settings.LANGCHAIN_ENDPOINT
 
 limiter = Limiter(key_func=get_remote_address)
 
+settings = get_settings()
 app = FastAPI(
     title="RAG API",
-    description="API de Retrieval-Augmented Generation con Gemini y Supabase",
+    description="...",
     version="1.0.0",
+    docs_url="/docs" if settings.ENVIRONMENT == "development" else None,
+    redoc_url="/redoc" if settings.ENVIRONMENT == "development" else None,
+    openapi_url="/openapi.json" if settings.ENVIRONMENT == "development" else None,
 )
 
 app.state.limiter = limiter
