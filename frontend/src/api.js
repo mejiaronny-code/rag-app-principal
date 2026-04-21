@@ -25,7 +25,7 @@ api.interceptors.response.use(
       // Token expirado o inválido — limpiar sesión y redirigir al login
       await supabase.auth.signOut()
       // Redirigir sin depender de React Router (funciona desde cualquier contexto)
-      window.location.href = '/login'
+      window.location.href = '/'
     }
     return Promise.reject(error)
   }
