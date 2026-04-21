@@ -24,8 +24,9 @@ export function useChat(sessionId, conversationId, loadConversationMessages) {
   const [loading, setLoading]   = useState(false)
   const [error, setError]       = useState(null)
 
-  // ← NUEVO: ref para detectar respuestas obsoletas (race condition)
   const currentConvIdRef = useRef(conversationId)
+  const isSendingRef     = useRef(false)
+
   useEffect(() => {
     currentConvIdRef.current = conversationId
   }, [conversationId])
@@ -35,24 +36,12 @@ export function useChat(sessionId, conversationId, loadConversationMessages) {
       setMessages([])
       return
     }
-  
+    if (isSendingRef.current) return
+
     let cancelled = false
     loadConversationMessages(conversationId).then(msgs => {
-      if (!cancelled) {
-        // Deduplicar por contenido+rol para evitar duplicados con mensajes locales
-        setMessages(prev => {
-          const dbMsgs = msgs ?? []
-          if (prev.length === 0) return dbMsgs
-          // Si la DB tiene más mensajes que el estado local, usar DB
-          // Si el estado local tiene mensajes optimistas no guardados aún, mantenerlos
-          const dbIds = new Set(dbMsgs.map(m => `${m.role}:${m.content}`))
-          const localOnly = prev.filter(m => 
-            m.id?.startsWith('user-') || m.id?.startsWith('assistant-')
-              ? !dbIds.has(`${m.role}:${m.content}`)
-              : false
-          )
-          return [...dbMsgs, ...localOnly]
-        })
+      if (!cancelled && !isSendingRef.current) {
+        setMessages(msgs ?? [])
       }
     })
     return () => { cancelled = true }
@@ -61,6 +50,7 @@ export function useChat(sessionId, conversationId, loadConversationMessages) {
   const sendMessage = useCallback(async (query, documentIds = [], overrideConvId = null) => {
     if (!query.trim() || loading) return
 
+    isSendingRef.current = true
     const effectiveConvId = overrideConvId || conversationId
 
     const userMessage = {
@@ -80,7 +70,6 @@ export function useChat(sessionId, conversationId, loadConversationMessages) {
     try {
       const data = await sendChat(sessionId, query, apiHistory, documentIds, effectiveConvId)
 
-      // ← NUEVO: descartar respuesta si el usuario cambió de conversación mientras esperaba
       if (effectiveConvId !== currentConvIdRef.current) return
 
       const assistantMessage = {
@@ -93,13 +82,13 @@ export function useChat(sessionId, conversationId, loadConversationMessages) {
       setMessages(prev => [...prev, assistantMessage])
       return assistantMessage
     } catch (e) {
-      // Descartar error si ya no estamos en esta conversación
       if (effectiveConvId !== currentConvIdRef.current) return
       const friendly = getFriendlyError(e)
       setError(friendly)
       setMessages(prev => prev.filter(m => m.id !== userMessage.id))
     } finally {
       setLoading(false)
+      isSendingRef.current = false
     }
   }, [sessionId, conversationId, messages, loading])
 
