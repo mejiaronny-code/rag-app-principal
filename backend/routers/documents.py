@@ -24,6 +24,7 @@ router = APIRouter()
 
 MAX_FILE_SIZE    = settings.MAX_FILE_SIZE_MB * 1024 * 1024
 MAX_DOCS_PER_USER = settings.MAX_DOCS_PER_USER
+MAX_CHUNKS = 500
 
 ALLOWED_EXTENSIONS = {
     "pdf", "docx", "doc", "txt", "md", "markdown",
@@ -152,10 +153,11 @@ async def upload_document(
         logger.exception(f"Error procesando documento {filename}")
         raise HTTPException(status_code=500, detail=f"Error procesando el documento: {e}")
 
-    MAX_CHUNKS = 2500
     if len(chunks) > MAX_CHUNKS:
-        logger.warning(f"'{filename}' tiene {len(chunks)} chunks, limitando a {MAX_CHUNKS}")
-        chunks = chunks[:MAX_CHUNKS]    
+        step = len(chunks) // MAX_CHUNKS
+        chunks = chunks[::step][:MAX_CHUNKS]
+        logger.warning(f"'{filename}' distribuido a {MAX_CHUNKS} chunks uniformes")
+   
 
     doc_id = await asyncio.to_thread(
         partial(
