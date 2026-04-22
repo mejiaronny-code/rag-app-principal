@@ -24,7 +24,7 @@ router = APIRouter()
 
 MAX_FILE_SIZE    = settings.MAX_FILE_SIZE_MB * 1024 * 1024
 MAX_DOCS_PER_USER = settings.MAX_DOCS_PER_USER
-MAX_CHUNKS = 500
+MAX_CHUNKS = 500 #SUBIR EN PRODUCCION LEELO 
 
 ALLOWED_EXTENSIONS = {
     "pdf", "docx", "doc", "txt", "md", "markdown",

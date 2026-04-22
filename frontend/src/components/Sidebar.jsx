@@ -115,7 +115,7 @@ export function Sidebar({
             <p className="text-sm font-semibold truncate" style={{ color: 'var(--accent-green)' }}>
               {fullName || 'Usuario'}
             </p>
-            <p className="text-xs" style={{ color: 'var(--accent-green)', opacity: 0.5 }}>RAG Chat</p>
+            <p className="text-xs" style={{ color: 'var(--accent-green)', opacity: 0.5 }}>Papyrus</p>
           </div>
         </div>
         {/* Botón cerrar — solo visible en móvil */}

@@ -2,8 +2,8 @@ import httpx
 
 # REEMPLAZA ESTOS 3 DATOS MANUALMENTE AQUÍ MISMO:
 API_KEY = "" 
-SENDER_EMAIL = "mejiaalejandro403@gmail.com"
-TEST_RECEIVER = "mejiaalejandro403+test@gmail.com"
+SENDER_EMAIL = "micorreo@gmail.com"
+TEST_RECEIVER = "micorreo+test@gmail.com"
 
 url = "https://api.brevo.com/v3/smtp/email"
 
