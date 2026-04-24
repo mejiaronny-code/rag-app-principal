@@ -34,10 +34,17 @@ export function AuthProvider({ children }) {
     })
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
+      async (_event, session) => {
         setUser(session?.user ?? null)
-        if (session?.user) fetchProfile(session.user.id)
-        else setProfile(null)
+        if (session?.user) {
+          // Pequeño delay para que el INSERT del perfil termine
+          if (_event === 'SIGNED_IN') {
+            await new Promise(r => setTimeout(r, 500))
+          }
+          await fetchProfile(session.user.id)
+        } else {
+          setProfile(null)
+        }
       }
     )
 
