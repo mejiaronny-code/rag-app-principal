@@ -68,8 +68,9 @@ export function AuthProvider({ children }) {
           id:         data.user.id,
           first_name: firstName,
           last_name:  lastName,
-          // active queda en false por el DEFAULT que cambiamos en SQL
         })
+        // ← Cargar el perfil inmediatamente después de insertarlo
+        await fetchProfile(data.user.id)
       }
       await new Promise(r => setTimeout(r, 600))
       return data

@@ -47,6 +47,10 @@ export function useChat(sessionId, conversationId, loadConversationMessages) {
     return () => { cancelled = true }
   }, [conversationId])
 
+  useEffect(() => {
+    setMessages([])
+  }, [sessionId])
+
   const sendMessage = useCallback(async (query, documentIds = [], overrideConvId = null) => {
     if (!query.trim() || loading) return
 
