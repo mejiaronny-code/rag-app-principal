@@ -84,6 +84,10 @@ async def health():
     status_code = 200 if all(v == "ok" or k == "environment" for k, v in checks.items()) else 503
     return JSONResponse(content=checks, status_code=status_code)
 
+@app.get("/")
+def root():
+    return {"status": "ok", "message": "Backend corriendo correctamente 🚀"}
+
 
 @app.exception_handler(Exception)
 async def generic_exception_handler(request: Request, exc: Exception):
