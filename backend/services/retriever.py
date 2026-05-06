@@ -7,8 +7,8 @@ from langsmith import traceable
 
 logger = logging.getLogger(__name__)
 
-MATCH_THRESHOLD = 0.3
-MATCH_COUNT = 5  # por variante del query
+MATCH_THRESHOLD = 0.15
+MATCH_COUNT = 8  # por variante del query
 
 @traceable(name="search_similar_chunks")
 def search_similar_chunks(
@@ -51,7 +51,7 @@ def deduplicate_chunks(chunks_lists: List[List[Dict[str, Any]]]) -> List[Dict[st
     
     # Ordenar por similitud descendente
     deduplicated = sorted(seen_ids.values(), key=lambda x: x.get("similarity", 0), reverse=True)
-    return deduplicated[:10]  # Top 10 chunks únicos
+    return deduplicated[:15]  # Top 10 chunks únicos
 
 @traceable(name="retrieve_context")
 def retrieve_context(query: str, session_id: str, document_ids: Optional[List[str]] = None) -> List[Dict[str, Any]]:
@@ -72,7 +72,7 @@ def retrieve_context(query: str, session_id: str, document_ids: Optional[List[st
                         session_id=session_id,
                         document_ids=[doc_id],  # ← un doc a la vez
                         match_count=chunks_per_doc,
-                        match_threshold=0.1,  # ← más bajo para no perder docs con menor similitud
+                        match_threshold=0.15,  # ← más bajo para no perder docs con menor similitud
                     )
                     all_results.append(results)
                     for r in results:
