@@ -1,7 +1,7 @@
 // frontend/src/hooks/useInactivityLogout.js
 import { useEffect, useRef, useCallback } from 'react'
 
-const INACTIVITY_TIMEOUT = 6 * 60 * 60 * 1000 // 2 horas en ms
+const INACTIVITY_TIMEOUT = 2 * 60 * 60 * 1000 // 2 horas en ms
 
 /**
  * Llama a onTimeout cuando el usuario no tiene actividad por INACTIVITY_TIMEOUT.
