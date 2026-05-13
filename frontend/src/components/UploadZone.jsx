@@ -2,7 +2,7 @@ import { useState, useRef } from 'react'
 import { Upload, Link, X, Loader2, AlertCircle } from 'lucide-react'
 
 const ACCEPTED_TYPES = '.pdf,.docx,.doc,.txt,.md,.jpg,.jpeg,.png,.gif,.webp,.xlsx,.xls'
-const MAX_MB = 30
+const MAX_MB = 20
 
 const UPLOAD_ERROR_MESSAGES = {
   429: null,
